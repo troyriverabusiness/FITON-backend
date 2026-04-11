@@ -110,8 +110,10 @@ export function useConversationSocket() {
           delta: msg.delta ?? "",
           isFinal: msg.is_final ?? false,
         };
+        // Route to the OPPONENT's panel: the other speaker needs the summary
+        // and counter-argument so they are prepared to respond.
         const setter =
-          update.speaker === "speaker_a" ? setSpeakerAUpdates : setSpeakerBUpdates;
+          update.speaker === "speaker_a" ? setSpeakerBUpdates : setSpeakerAUpdates;
         setter((prev) => [...prev, update]);
         break;
       }
@@ -122,8 +124,9 @@ export function useConversationSocket() {
         break;
 
       case "emotion_tags": {
+        // Route to OPPONENT's panel to match where the argument cards landed.
         const setter =
-          msg.speaker === "speaker_a" ? setSpeakerAEmotions : setSpeakerBEmotions;
+          msg.speaker === "speaker_a" ? setSpeakerBEmotions : setSpeakerAEmotions;
         setter((prev) => ({ ...prev, [msg.turn_id!]: msg.tags ?? [] }));
         break;
       }

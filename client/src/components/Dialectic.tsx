@@ -199,9 +199,9 @@ function LogoMark({ appState }: { appState: AppState }) {
 
 // ─── Emotion Pills ───────────────────────────────────────────────────────────
 
-function EmotionPills({ tags }: { tags: string[] }) {
+function EmotionPills({ tags, side }: { tags: string[]; side: 'left' | 'right' }) {
   return (
-    <div className="d-emotion-pills">
+    <div className={`d-emotion-pills d-emotion-pills--${side}`}>
       <AnimatePresence>
         {tags.map((tag, i) => (
           <motion.span
@@ -261,7 +261,7 @@ function RoleCard({
     >
       <div className="d-arg-meta">{roleLabel}</div>
       <div className="d-arg-headline">{text}</div>
-      {emotions && emotions.length > 0 && <EmotionPills tags={emotions} />}
+      {emotions && emotions.length > 0 && <EmotionPills tags={emotions} side={side} />}
     </motion.div>
   );
 }
