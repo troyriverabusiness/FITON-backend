@@ -46,7 +46,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from server.config import get_settings
 from server.models.turn import (
-    ArgumentRole,
     SessionState,
     SpeakerBuffer,
     SpeakerLabel,
