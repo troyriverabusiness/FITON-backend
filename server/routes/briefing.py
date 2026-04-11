@@ -30,6 +30,8 @@ class BriefingRequest(BaseModel):
 
 class PatternOut(BaseModel):
     argument: str
+    emotional_drivers: str
+    emotion_tags: list[str]
     rebuttal: str
 
 

@@ -1,4 +1,4 @@
-/* ─── Hamburger Trigger ───────────────────────────────────────────────────── */
+/* ─── Hamburger trigger ────────────────────────────────────────────────────── */
 
 .nd-trigger {
   background: none;
@@ -27,87 +27,4 @@
   height: 1.5px;
   background: #000;
   border-radius: 1px;
-}
-
-/* ─── Sheet content override ──────────────────────────────────────────────── */
-/* Tailwind Merge will resolve bg-[#f7f7f6] over bg-background and p-0 over p-6 */
-
-.nd-content {
-  background: #f7f7f6 !important;
-  padding: 0 !important;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
-  box-shadow: none !important;
-}
-
-/* Restyle the built-in shadcn close button */
-.nd-content [data-radix-dialog-close] {
-  top: 20px;
-  right: 20px;
-  opacity: 0.35;
-  color: #000;
-  transition: opacity 0.15s;
-}
-
-.nd-content [data-radix-dialog-close]:hover {
-  opacity: 0.8;
-}
-
-/* ─── Brand row ───────────────────────────────────────────────────────────── */
-
-.nd-brand-row {
-  display: flex;
-  align-items: center;
-  height: 72px;
-  padding: 0 28px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  flex-shrink: 0;
-}
-
-.nd-brand {
-  font-family: 'EB Garamond', serif;
-  font-size: 20px;
-  font-weight: 400;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #000;
-}
-
-/* ─── Nav ─────────────────────────────────────────────────────────────────── */
-
-.nd-nav {
-  flex: 1;
-  padding: 20px 0;
-}
-
-.nd-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.nd-link {
-  display: flex;
-  align-items: center;
-  padding: 14px 28px;
-  font-family: 'Space Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: lowercase;
-  color: #000;
-  text-decoration: none;
-  opacity: 0.35;
-  transition: opacity 0.15s;
-  border-left: 2px solid transparent;
-  position: relative;
-}
-
-.nd-link:hover {
-  opacity: 0.65;
-}
-
-.nd-link--active {
-  opacity: 1;
-  border-left-color: #000;
 }

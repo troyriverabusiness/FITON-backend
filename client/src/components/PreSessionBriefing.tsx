@@ -13,6 +13,8 @@ const BACKEND_URL =
 
 interface Pattern {
   argument: string;
+  emotional_drivers: string;
+  emotion_tags: string[];
   rebuttal: string;
 }
 
@@ -70,9 +72,9 @@ export default function PreSessionBriefing({ open, onOpenChange }: PreSessionBri
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="briefing-dialog">
         <DialogHeader>
-          <DialogTitle className="briefing-title">Prepare for debate</DialogTitle>
+          <DialogTitle className="briefing-title">understand the other side</DialogTitle>
           <DialogDescription className="briefing-description">
-            Enter your debate topic to surface common arguments used against you and ready-made rebuttals.
+            Enter a debate topic to explore the perspectives and emotions behind common arguments — and how to engage with them.
           </DialogDescription>
         </DialogHeader>
 
@@ -92,7 +94,7 @@ export default function PreSessionBriefing({ open, onOpenChange }: PreSessionBri
               className="briefing-submit"
               disabled={!topic.trim() || loading}
             >
-              {loading ? 'analysing...' : 'get briefing'}
+              {loading ? 'exploring...' : 'explore perspectives'}
             </button>
             {error && <div className="briefing-error">{error}</div>}
 
@@ -103,7 +105,7 @@ export default function PreSessionBriefing({ open, onOpenChange }: PreSessionBri
                   <span className="d-dot d-dot--2">.</span>
                   <span className="d-dot d-dot--3">.</span>
                 </div>
-                <div className="briefing-loading-text">mining past debates</div>
+                <div className="briefing-loading-text">exploring perspectives</div>
               </div>
             )}
           </form>
@@ -125,7 +127,19 @@ export default function PreSessionBriefing({ open, onOpenChange }: PreSessionBri
                     <span className="briefing-card-label">argument {i + 1}</span>
                   </div>
                   <div className="briefing-card-argument">{pattern.argument}</div>
-                  <div className="briefing-card-rebuttal-label">rebuttal</div>
+
+                  <div className="briefing-card-section-label">why people feel this way</div>
+                  <div className="briefing-card-drivers">{pattern.emotional_drivers}</div>
+
+                  {pattern.emotion_tags.length > 0 && (
+                    <div className="briefing-emotion-pills">
+                      {pattern.emotion_tags.map((tag, j) => (
+                        <span key={j} className="briefing-emotion-pill">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="briefing-card-section-label briefing-card-section-label--rebuttal">how to respond</div>
                   <div className="briefing-card-rebuttal">{pattern.rebuttal}</div>
                 </div>
               ))}

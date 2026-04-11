@@ -44,15 +44,21 @@ grasps the challenge instantly.\
 """
 
 _BRIEFING_SYSTEM = """\
-You are a debate coach. Given a topic and a list of counterarguments that have \
-been used against this person in past debates, identify the 3–5 most recurring \
-argument patterns. For each pattern, provide:\
-  - "argument": a 1-sentence summary of the opposing argument\
-  - "rebuttal": a 2–3 sentence rebuttal the person can use\
+You are an empathetic debate coach. Given a topic and a list of counterarguments \
+that have been used against this person in past debates, identify the 3–5 most \
+recurring argument patterns. For each pattern provide:\
+  - "argument": a 1-sentence summary of the logical opposing argument\
+  - "emotional_drivers": 2-3 sentences describing the emotions and lived \
+    perspectives that make people hold this view — not the logic, but the feeling \
+    behind it (fear, identity, distrust, grief, pride, etc.)\
+  - "emotion_tags": an array of 2–4 lowercase short labels capturing the \
+    emotional tenor of this argument (e.g. ["fearful", "protective", "distrustful"])\
+  - "rebuttal": 2–3 sentences that acknowledge the emotional reality first, \
+    then offer a substantive counter — do NOT ignore the emotions, address them\
 If the past-counterarguments list is empty, generate the 3–5 most common \
 arguments people make on this topic from general knowledge.\
 Return ONLY valid JSON matching this schema — no prose, no markdown:\
-{"patterns": [{"argument": "...", "rebuttal": "..."}]}\
+{"patterns": [{"argument": "...", "emotional_drivers": "...", "emotion_tags": ["...", "..."], "rebuttal": "..."}]}\
 """
 
 _BRIEFING_USER_TEMPLATE = """\
@@ -140,22 +146,28 @@ class ClaudeService:
         try:
             response = await self._client.messages.create(
                 model=self._model,
-                max_tokens=1024,
+                max_tokens=2048,
                 system=_BRIEFING_SYSTEM,
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw = response.content[0].text.strip()
+            logger.debug("Briefing raw response for topic %r: %.200s", topic, raw)
             raw = _strip_markdown_fences(raw)
             data = json.loads(raw)
             patterns = data.get("patterns", [])
             if isinstance(patterns, list):
                 return [
-                    {"argument": str(p.get("argument", "")), "rebuttal": str(p.get("rebuttal", ""))}
+                    {
+                        "argument": str(p.get("argument", "")),
+                        "emotional_drivers": str(p.get("emotional_drivers", "")),
+                        "emotion_tags": [str(t) for t in p.get("emotion_tags", []) if t],
+                        "rebuttal": str(p.get("rebuttal", "")),
+                    }
                     for p in patterns
                     if isinstance(p, dict)
                 ]
         except Exception as exc:
-            logger.error("Briefing generation failed for topic %r: %s", topic, exc)
+            logger.error("Briefing generation failed for topic %r: %s — raw: %.300s", topic, exc, raw if 'raw' in dir() else '(no response)')
         return []
 
     async def generate_emotions(self, turn: Turn) -> list[str]:

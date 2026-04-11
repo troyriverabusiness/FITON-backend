@@ -6,6 +6,8 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 interface Pattern {
   argument: string;
+  emotional_drivers: string;
+  emotion_tags: string[];
   rebuttal: string;
 }
 
@@ -49,8 +51,8 @@ export default function Prepare() {
       <header className="page-header">
         <NavDrawer />
         <div className="page-header-center">
-          <div className="page-header-title">PREPARE</div>
-          <div className="page-header-subtitle">ready-made rebuttals for your debate</div>
+          <div className="page-header-title">PERSPECTIVES</div>
+          <div className="page-header-subtitle">understand the other side before you speak</div>
         </div>
         <div className="page-header-right" />
       </header>
@@ -60,7 +62,7 @@ export default function Prepare() {
       <div className="pr-content">
         {!result ? (
           <form onSubmit={handleSubmit} className="pr-form">
-            <label className="pr-label">debate topic</label>
+            <label className="pr-label">what's the topic</label>
             <input
               type="text"
               className="pr-input"
@@ -76,7 +78,7 @@ export default function Prepare() {
               className="pr-submit"
               disabled={!topic.trim() || loading}
             >
-              {loading ? 'analysing…' : 'get briefing'}
+              {loading ? 'exploring…' : 'explore perspectives'}
             </button>
             {error && <div className="pr-error">{error}</div>}
             {loading && (
@@ -84,7 +86,7 @@ export default function Prepare() {
                 <span className="pr-dot pr-dot--1">.</span>
                 <span className="pr-dot pr-dot--2">.</span>
                 <span className="pr-dot pr-dot--3">.</span>
-                <span className="pr-loading-text">mining past debates</span>
+                <span className="pr-loading-text">exploring perspectives</span>
               </div>
             )}
           </form>
@@ -106,10 +108,20 @@ export default function Prepare() {
                 <div key={i} className="pr-card">
                   <div className="pr-card-number">{String(i + 1).padStart(2, '0')}</div>
                   <div className="pr-card-body">
-                    <div className="pr-card-section-label">argument against you</div>
+                    <div className="pr-card-section-label">the argument</div>
                     <div className="pr-card-arg">{p.argument}</div>
                     <div className="pr-card-divider" />
-                    <div className="pr-card-section-label">your rebuttal</div>
+                    <div className="pr-card-section-label">why people feel this way</div>
+                    <div className="pr-card-drivers">{p.emotional_drivers}</div>
+                    {p.emotion_tags && p.emotion_tags.length > 0 && (
+                      <div className="pr-emotion-pills">
+                        {p.emotion_tags.map((tag, j) => (
+                          <span key={j} className="pr-emotion-pill">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="pr-card-divider" />
+                    <div className="pr-card-section-label">how to engage</div>
                     <div className="pr-card-rebuttal">{p.rebuttal}</div>
                   </div>
                 </div>
