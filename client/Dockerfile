@@ -10,20 +10,15 @@ RUN npm install
 FROM base AS dev
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-EXPOSE 3000
+EXPOSE 8080
 CMD ["npm", "run", "dev"]
 
 # ── Production build ──────────────────────────────────────────────────────────
-# TODO: Use this stage in compose.yaml once the app is production-ready.
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM base AS prod
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
+FROM nginx:alpine AS prod
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80

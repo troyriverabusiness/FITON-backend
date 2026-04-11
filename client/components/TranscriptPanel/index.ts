@@ -1,1 +1,0 @@
-export { TranscriptPanel } from "./TranscriptPanel";

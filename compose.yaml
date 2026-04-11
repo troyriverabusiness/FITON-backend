@@ -27,21 +27,6 @@ services:
 
   client:
     build:
-      context: ./client
-      target: dev
-    ports:
-      - "3000:3000"
-    env_file: .env
-    environment:
-      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws/conversation
-    volumes:
-      - ./client:/app
-      - /app/node_modules
-    depends_on:
-      - server
-
-  dialectic:
-    build:
       context: ./client-1
       target: dev
     ports:
