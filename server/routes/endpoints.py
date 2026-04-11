@@ -8,10 +8,10 @@ def get_feed():
     return {"status": "ok"}
 
 
-# Get effects of policy (for a user)
-@router.get("/effects/{user_id}")
-def get_effects(user_id: str):
-    return {"status": "ok"}
+# Get effects of a topic (policy/discussion) for a specific user
+@router.get("/effects/{topic_id}/{user_id}")
+def get_effects(topic_id: str, user_id: str) -> list[dict]:
+    return []
 
 
 # Onboard a user

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from data_access.database import get_db
 from data_access.models.user import User
-from schemas.user import UserCreate, UserLogin, UserOut
+from schemas.user import UserCreate, UserLogin, UserOut, UserProfileUpdate
 from services.auth import get_current_user, login_user, signup_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,3 +32,20 @@ def logout(request: Request):
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/profile-text", response_model=UserOut)
+def set_profile_text(
+    body: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.profile_text = body.profile_text
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/profile-text")
+def get_profile_text(current_user: User = Depends(get_current_user)):
+    return {"profile_text": current_user.profile_text}
