@@ -8,15 +8,17 @@ dependencies = [
     # ── Web framework ──────────────────────────────────────────────────────────
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
-
     # ── Config / validation ────────────────────────────────────────────────────
     "pydantic-settings>=2.0",
     "python-dotenv>=1.0",
-
     # ── Anthropic / Claude ─────────────────────────────────────────────────────
     "anthropic>=0.30",
-
+    # ── Database ───────────────────────────────────────────────────────────────
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
     # ── Speaker diarization ────────────────────────────────────────────────────
+    # huggingface-hub>=0.25 removed use_auth_token; pyannote.audio 3.3.2 needs it
+    "huggingface-hub>=0.19.0,<0.25.0",
     "pyannote.audio==3.3.2",
     "faster-whisper==1.1.0",
     "torch==2.3.0",

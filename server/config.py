@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Minimum number of words in a turn before it is sent to Claude.
     min_turn_words: int = 3
 
+    # ── Database ──────────────────────────────────────────────────────────────
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+
     # ── WebSocket / server ────────────────────────────────────────────────────
     audio_sample_rate: int = 16_000
 

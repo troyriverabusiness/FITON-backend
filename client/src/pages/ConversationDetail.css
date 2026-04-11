@@ -1,0 +1,188 @@
+/* ─── Conversation Detail ─────────────────────────────────────────────────── */
+
+.cd-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: #f7f7f6;
+  color: #000000;
+}
+
+.cd-root * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+
+.cd-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 20px;
+  position: relative;
+}
+
+.cd-back {
+  position: absolute;
+  left: 24px;
+  top: 32px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #000000;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.cd-back:hover {
+  opacity: 1;
+}
+
+.cd-title {
+  font-family: 'EB Garamond', serif;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cd-meta-line {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #000000;
+  opacity: 0.45;
+  margin-top: 4px;
+}
+
+/* ─── Thread ──────────────────────────────────────────────────────────────── */
+
+.cd-thread {
+  flex: 1;
+  padding: 8px 24px 64px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cd-empty {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  text-align: center;
+  color: #000000;
+  opacity: 0.45;
+  padding: 64px 0;
+}
+
+/* ─── Turn Bubble ─────────────────────────────────────────────────────────── */
+
+.cd-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  max-width: 80%;
+  overflow: hidden;
+}
+
+.cd-turn--left {
+  align-self: flex-start;
+}
+
+.cd-turn--right {
+  align-self: flex-end;
+}
+
+.cd-turn-speaker {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+}
+
+.cd-turn-text {
+  font-family: 'EB Garamond', serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ─── Emotion Pills ───────────────────────────────────────────────────────── */
+
+.cd-emotion-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.cd-emotion-pill {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #000000;
+  opacity: 0.65;
+}
+
+/* ─── Expand / Collapse ───────────────────────────────────────────────────── */
+
+.cd-expand-btn {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: none;
+  border: none;
+  color: #000000;
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  transition: opacity 0.2s;
+}
+
+.cd-expand-btn:hover {
+  opacity: 0.8;
+}
+
+/* ─── Argument Cards ──────────────────────────────────────────────────────── */
+
+.cd-args {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.cd-arg-card {
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.cd-arg-meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.4;
+  margin-bottom: 6px;
+}
+
+.cd-arg-text {
+  font-family: 'EB Garamond', serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #000000;
+}

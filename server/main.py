@@ -3,6 +3,10 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from contextlib import asynccontextmanager
+
+from server.db import init_db
+from server.routes.conversations import router as conversations_router
 from server.ws.conversation import router as conversation_router
 
 # Importing diarizer triggers model loading at startup so the first
@@ -14,6 +18,12 @@ logging.basicConfig(
     format="%(levelname)s [%(name)s] %(message)s",
 )
 
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title="FITON — Real-time Conversation Analysis",
     description=(
@@ -21,6 +31,7 @@ app = FastAPI(
         "→ faster-whisper transcription → Claude argument generation."
     ),
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -32,6 +43,7 @@ app.add_middleware(
 )
 
 app.include_router(conversation_router, tags=["conversation"])
+app.include_router(conversations_router)
 
 
 @app.get("/health", tags=["meta"])

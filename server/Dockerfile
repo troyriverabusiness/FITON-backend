@@ -7,48 +7,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
     git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir \
-    "huggingface_hub==0.24.7" \
-    fastapi \
-    "uvicorn[standard]" \
-    python-multipart \
-    "pydantic-settings>=2.0" \
-    python-dotenv \
-    "anthropic>=0.30" \
-    "pyannote.audio==3.3.2" \
-    "faster-whisper==1.1.0" \
-    "torch==2.3.0" \
-    "torchaudio==2.3.0" \
-    "numpy==1.26.4" \
-    "soundfile==0.12.1" \
-    "librosa==0.10.2" \
-    sqlalchemy \
-    psycopg2-binary \
-    "passlib[bcrypt]" \
-    itsdangerous
+# Install uv
+RUN curl -Ls https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Install Python deps from lockfile — this is the single source of truth
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 # ── Pre-download models at build time so startup is instant ───────────────────
 # Pass your HuggingFace token: docker compose build --build-arg HF_TOKEN=hf_xxx
 ARG HF_TOKEN
-# Disable XetHub CDN (times out) — forces standard huggingface.co download.
-# Increase timeout to 5 min for large model files on slow connections.
-ENV HF_HUB_DISABLE_XET=1 \
+# Expose token as env var — huggingface_hub reads HF_TOKEN automatically,
+# so from_pretrained() needs no explicit auth kwarg regardless of version.
+ENV HF_TOKEN=$HF_TOKEN \
+    HF_HUB_DISABLE_XET=1 \
     HF_HUB_HTTP_TIMEOUT=300
-RUN python - <<'EOF'
-import os, torch
+RUN uv run python - <<'EOF'
+import os
 from pyannote.audio import Pipeline
 from faster_whisper import WhisperModel
 
-token = os.environ.get("HF_TOKEN") or ""
-if not token:
+if not os.environ.get("HF_TOKEN"):
     raise SystemExit("HF_TOKEN build arg is required. Run: docker compose build --build-arg HF_TOKEN=hf_xxx server")
 
 print("Downloading pyannote/speaker-diarization-3.1…")
-pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=token)
+pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
 print("Downloading faster-whisper medium…")
 WhisperModel("medium", device="cpu", compute_type="int8")
 print("Models downloaded successfully.")
@@ -59,4 +46,4 @@ COPY . ./server/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]

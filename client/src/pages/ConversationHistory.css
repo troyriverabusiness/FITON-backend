@@ -1,0 +1,134 @@
+/* ─── Conversation History ────────────────────────────────────────────────── */
+
+.ch-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: #f7f7f6;
+  color: #000000;
+}
+
+.ch-root * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+
+.ch-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 20px;
+  position: relative;
+}
+
+.ch-back {
+  position: absolute;
+  left: 24px;
+  top: 32px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #000000;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.ch-back:hover {
+  opacity: 1;
+}
+
+.ch-title {
+  font-family: 'EB Garamond', serif;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ch-subtitle {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #000000;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+/* ─── Content ─────────────────────────────────────────────────────────────── */
+
+.ch-content {
+  flex: 1;
+  padding: 16px 24px 48px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.ch-empty {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  text-align: center;
+  color: #000000;
+  opacity: 0.45;
+  padding: 64px 0;
+}
+
+/* ─── Card List ───────────────────────────────────────────────────────────── */
+
+.ch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  text-decoration: none;
+  color: #000000;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.ch-card:hover {
+  border-color: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.ch-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.ch-card-date {
+  font-family: 'EB Garamond', serif;
+  font-size: 16px;
+}
+
+.ch-card-time {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  opacity: 0.45;
+}
+
+.ch-card-turns {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.ch-card-duration {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  opacity: 0.45;
+}

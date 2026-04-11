@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   useConversationSocket,
@@ -64,6 +65,7 @@ function Header() {
     <header className="d-header">
       <div className="d-header-title">FITON</div>
       <div className="d-header-subtitle">a real-time argument recorder</div>
+      <Link to="/conversations" className="d-history-link">past conversations</Link>
     </header>
   );
 }

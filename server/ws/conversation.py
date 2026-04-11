@@ -41,10 +41,14 @@ import asyncio
 import json
 import logging
 import uuid
+from collections import defaultdict
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from server.config import get_settings
+from server.db import async_session
+from server.models.db import Conversation as DBConversation, DBTurn
 from server.models.turn import (
     SessionState,
     SpeakerBuffer,
@@ -75,6 +79,17 @@ async def conversation_ws(websocket: WebSocket) -> None:
     session_id = str(uuid.uuid4())
     state = SessionState(session_id=session_id)
     claude = ClaudeService(settings)
+
+    # Accumulate streamed argument text so we can persist the full result.
+    # Structure: { turn_id: { "argument": "...", "counterargument": "..." } }
+    arg_accumulator: dict[str, dict[str, str]] = defaultdict(
+        lambda: {"argument": "", "counterargument": ""}
+    )
+    # Accumulate emotion tags per turn_id.
+    emotion_accumulator: dict[str, list[str]] = {}
+    # Track turn ordering and speaker/text for persistence.
+    turn_order: list[tuple[str, str, str]] = []  # (turn_id, speaker, text)
+    session_start = datetime.now(timezone.utc)
 
     # Reset per-session speaker memory so SPEAKER_00 is always the first
     # voice heard in *this* session.
@@ -130,6 +145,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     buf.completed_turns.append(turn)
                     state.transcript.append(turn)
 
+                    turn_order.append((turn_id, speaker.value, full_text))
+
                     await websocket.send_json({
                         "type": "turn_complete",
                         "speaker": speaker.value,
@@ -148,6 +165,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
                             speaker_context=buf.context_text(),
                             opponent_context=opp_buf.context_text(),
                         ):
+                            if update.delta:
+                                arg_accumulator[update.turn_id][update.role.value] += update.delta
                             await websocket.send_json({
                                 "type": "argument_update",
                                 "speaker": update.speaker.value,
@@ -170,6 +189,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     try:
                         tags = await claude.generate_emotions(turn)
                         if tags:
+                            emotion_accumulator[turn_id] = tags
                             await websocket.send_json({
                                 "type": "emotion_tags",
                                 "speaker": speaker.value,
@@ -186,6 +206,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 except json.JSONDecodeError:
                     continue
                 if payload.get("type") == "end_session":
+                    await _save_conversation(
+                        session_id, session_start, turn_order,
+                        arg_accumulator, emotion_accumulator,
+                    )
                     state.is_active = False
                     await websocket.send_json({"type": "session_ended"})
 
@@ -231,6 +255,46 @@ def _get_buffer(state: SessionState, speaker: SpeakerLabel) -> SpeakerBuffer:
 
 def _opponent(speaker: SpeakerLabel) -> SpeakerLabel:
     return SpeakerLabel.SPEAKER_B if speaker == SpeakerLabel.SPEAKER_A else SpeakerLabel.SPEAKER_A
+
+
+async def _save_conversation(
+    session_id: str,
+    started_at: datetime,
+    turn_order: list[tuple[str, str, str]],
+    arg_accumulator: dict[str, dict[str, str]],
+    emotion_accumulator: dict[str, list[str]],
+) -> None:
+    """Persist the completed conversation and its turns to the database."""
+    if not turn_order:
+        return
+
+    try:
+        async with async_session() as session:
+            conversation = DBConversation(
+                id=uuid.UUID(session_id),
+                created_at=started_at,
+                ended_at=datetime.now(timezone.utc),
+            )
+            session.add(conversation)
+
+            for position, (turn_id, speaker, text) in enumerate(turn_order):
+                args = arg_accumulator.get(turn_id, {})
+                db_turn = DBTurn(
+                    id=uuid.UUID(turn_id),
+                    conversation_id=conversation.id,
+                    speaker=speaker,
+                    text=text,
+                    argument_text=args.get("argument", ""),
+                    counterargument_text=args.get("counterargument", ""),
+                    emotion_tags=emotion_accumulator.get(turn_id),
+                    position=position,
+                )
+                session.add(db_turn)
+
+            await session.commit()
+            logger.info("Session %s: conversation saved (%d turns)", session_id, len(turn_order))
+    except Exception as exc:
+        logger.error("Session %s: failed to save conversation: %s", session_id, exc)
 
 
 def _make_turn(
