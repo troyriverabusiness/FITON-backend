@@ -1,0 +1,812 @@
+/* ─── Reset & Globals ────────────────────────────────────────────────────── */
+
+.d-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background: #f7f7f6;
+  color: #000000;
+  overflow: hidden;
+  position: relative;
+}
+
+
+.d-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+.d-root * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.d-header {
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.d-header-title {
+  font-family: 'EB Garamond', serif;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #000000;
+}
+
+.d-header-subtitle {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #000000;
+  margin-top: 2px;
+}
+
+/* ─── Canvas Wrapper ─────────────────────────────────────────────────────── */
+
+.d-canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.d-canvas {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* ─── Organic Dividing Path ───────────────────────────────────────────────── */
+
+.d-dividing-path {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  width: 80px;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ─── Logo Mark ──────────────────────────────────────────────────────────── */
+
+.d-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.d-logo--idle {
+  animation: logoSpin 60s linear infinite;
+}
+
+.d-logo--recording {
+  animation: logoSpin 8s linear infinite;
+}
+
+.d-logo--spinout {
+  animation: logoSpinOut 0.6s ease-in-out forwards;
+}
+
+@keyframes logoSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes logoSpinOut {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ─── Panels ─────────────────────────────────────────────────────────────── */
+
+.d-panel {
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.d-panel--left {
+  padding: 0 40px 32px 48px;
+}
+
+.d-panel--right {
+  padding: 0 48px 32px 40px;
+}
+
+.d-panel-header {
+  position: sticky;
+  top: 0;
+  background: transparent;
+  padding: 16px 0 8px 0;
+  z-index: 1;
+}
+
+.d-panel-header--right {
+  text-align: right;
+}
+
+.d-panel-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #000000;
+}
+
+.d-panel-line {
+  width: 100%;
+  height: 3px;
+  margin-top: 8px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='3'%3E%3Cpath d='M0 1.5 C20 1.1 40 1.9 60 1.4 C80 1.0 100 2.0 120 1.5 C140 1.1 160 1.8 180 1.3 C190 1.6 200 1.5 200 1.5' stroke='%23000' stroke-width='0.5' fill='none' opacity='0.7'/%3E%3C/svg%3E") repeat-x left center;
+}
+
+.d-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 16px;
+}
+
+.d-panel-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Empty Panel ────────────────────────────────────────────────────────── */
+
+.d-empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+}
+
+.d-empty-panel--right {
+  align-items: flex-end;
+}
+
+.d-empty-panel--left {
+  align-items: flex-start;
+}
+
+.d-empty-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: #000000;
+  opacity: 0.15;
+}
+
+.d-empty-hint {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  color: #000000;
+  opacity: 0.1;
+  margin-top: 8px;
+}
+
+/* ─── Argument Cards ─────────────────────────────────────────────────────── */
+
+.d-arg-card {
+  margin-bottom: 28px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 16px;
+  transition: background 0.2s ease;
+}
+
+.d-arg-card:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.d-arg-card--right {
+  text-align: right;
+}
+
+.d-arg-card:hover .d-arg-headline {
+  letter-spacing: 0.01em;
+}
+
+.d-arg-meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #000000;
+  opacity: 0.4;
+}
+
+.d-arg-headline {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.5;
+  color: #000000;
+  margin-top: 6px;
+  transition: letter-spacing 0.3s ease;
+}
+
+.d-arg-transcript {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #000000;
+  opacity: 0.55;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  margin-top: 6px;
+}
+
+.d-arg-separator {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: #000000;
+  opacity: 0.2;
+  text-align: center;
+  margin: 0 0 28px 0;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+
+.d-footer {
+  height: 120px;
+  flex-shrink: 0;
+  position: relative;
+  background: transparent;
+}
+
+.d-footer-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='3'%3E%3Cpath d='M0 1.5 C30 1.0 60 2.0 90 1.3 C120 1.8 150 1.1 180 1.7 C210 1.2 240 1.9 270 1.4 C285 1.6 300 1.5 300 1.5' stroke='%23000' stroke-width='0.5' fill='none' opacity='0.7'/%3E%3C/svg%3E") repeat-x left center;
+}
+
+.d-footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  position: relative;
+}
+
+/* ─── Timer ──────────────────────────────────────────────────────────────── */
+
+.d-timer {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #000000;
+  position: absolute;
+  left: 50%;
+  transform: translateX(calc(-50% - 60px));
+}
+
+/* ─── Record Button ──────────────────────────────────────────────────────── */
+
+.d-record-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.d-record-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1.5px solid #000000;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  outline: none;
+}
+
+.d-record-btn:hover {
+  width: 60px;
+  height: 60px;
+  border-width: 2px;
+}
+
+.d-record-btn--active {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.d-record-btn--active:hover {
+  animation: none;
+}
+
+.d-record-btn--active:hover .d-record-inner--square {
+  transform: rotate(45deg);
+}
+
+.d-record-btn--disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.d-record-inner {
+  width: 16px;
+  height: 16px;
+  background: #000000;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.d-record-btn:hover .d-record-inner:not(.d-record-inner--square) {
+  width: 20px;
+  height: 20px;
+}
+
+.d-record-inner--square {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  transition: all 0.3s ease;
+}
+
+.d-record-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #000000;
+  margin-top: 12px;
+}
+
+.d-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ─── End Debate ─────────────────────────────────────────────────────────── */
+
+.d-end-debate {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #000000;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: letter-spacing 0.2s ease, opacity 0.2s ease;
+}
+
+.d-end-debate:hover {
+  letter-spacing: 0.25em;
+}
+
+/* ─── Mic Error ──────────────────────────────────────────────────────────── */
+
+.d-mic-error {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: #000000;
+  opacity: 0.5;
+  margin-top: 10px;
+}
+
+/* ─── Speaker Indicator ──────────────────────────────────────────────────── */
+
+.d-speaker-indicator {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: #000000;
+  position: absolute;
+  left: 50%;
+  transform: translateX(calc(-50% + 60px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.d-speaker-divider {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: #000000;
+}
+
+/* ─── Unsupported Browser ────────────────────────────────────────────────── */
+
+.d-unsupported {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: #000000;
+  opacity: 0.4;
+  gap: 8px;
+  text-align: center;
+}
+
+/* ─── Overlay ────────────────────────────────────────────────────────────── */
+
+.d-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  z-index: 10;
+  overflow-y: auto;
+}
+
+/* ─── Loading ────────────────────────────────────────────────────────────── */
+
+.d-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.d-loading-dots {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  color: #000000;
+}
+
+.d-dot {
+  display: inline-block;
+  animation: dotFade 1.2s ease-in-out infinite;
+}
+
+.d-dot--1 { animation-delay: 0ms; }
+.d-dot--2 { animation-delay: 200ms; }
+.d-dot--3 { animation-delay: 400ms; }
+
+@keyframes dotFade {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 1; }
+}
+
+.d-loading-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #000000;
+  margin-top: 16px;
+}
+
+/* ─── Analysis ───────────────────────────────────────────────────────────── */
+
+.d-analysis {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.d-analysis--short {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.d-short-message {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 20px;
+  color: #000000;
+  text-align: center;
+}
+
+.d-analysis-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.d-analysis-title {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 32px;
+  color: #000000;
+}
+
+.d-analysis-line {
+  width: 100%;
+  height: 3px;
+  margin: 16px 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='3'%3E%3Cpath d='M0 1.5 C20 1.1 40 1.9 60 1.4 C80 1.0 100 2.0 120 1.5 C140 1.1 160 1.8 180 1.3 C190 1.6 200 1.5 200 1.5' stroke='%23000' stroke-width='0.5' fill='none' opacity='0.7'/%3E%3C/svg%3E") repeat-x left center;
+}
+
+.d-analysis-meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: #000000;
+  opacity: 0.4;
+}
+
+/* ─── Sections ───────────────────────────────────────────────────────────── */
+
+.d-section {
+  margin-bottom: 40px;
+}
+
+.d-section-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #000000;
+  opacity: 0.4;
+  margin-bottom: 16px;
+}
+
+.d-verdict {
+  font-family: 'EB Garamond', serif;
+  font-size: 22px;
+  font-style: italic;
+  line-height: 1.6;
+  color: #000000;
+}
+
+/* ─── Argument Map ───────────────────────────────────────────────────────── */
+
+.d-argmap {
+  display: flex;
+  gap: 0;
+}
+
+.d-argmap-col {
+  flex: 1;
+  padding-right: 16px;
+}
+
+.d-argmap-col--right {
+  padding-right: 0;
+  padding-left: 16px;
+}
+
+.d-argmap-divider {
+  width: 3px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='80'%3E%3Cpath d='M1.5 0 C1.2 10 1.8 20 1.4 30 C1.1 40 1.9 50 1.5 60 C1.3 70 1.7 80 1.5 80' stroke='%23000' stroke-width='0.5' fill='none' opacity='0.7'/%3E%3C/svg%3E") repeat-y center;
+  align-self: stretch;
+}
+
+.d-argmap-header {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: #000000;
+  margin-bottom: 16px;
+}
+
+.d-argmap-header--right {
+  text-align: right;
+}
+
+.d-argmap-item {
+  margin-bottom: 16px;
+}
+
+.d-argmap-item--right {
+  text-align: right;
+}
+
+.d-argmap-text {
+  font-family: 'EB Garamond', serif;
+  font-size: 14px;
+  color: #000000;
+  margin-bottom: 6px;
+}
+
+.d-strength-bar {
+  width: 100%;
+  height: 1px;
+  background: transparent;
+}
+
+.d-strength-fill {
+  height: 3px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='3'%3E%3Cpath d='M0 1.5 C20 1.1 40 1.9 60 1.4 C80 1.0 100 2.0 120 1.5 C140 1.1 160 1.8 180 1.3 C190 1.6 200 1.5 200 1.5' stroke='%23000' stroke-width='0.6' fill='none' opacity='0.75'/%3E%3C/svg%3E") repeat-x left center;
+}
+
+.d-strength-bar--right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ─── Bullets ────────────────────────────────────────────────────────────── */
+
+.d-bullet {
+  font-family: 'EB Garamond', serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #000000;
+}
+
+/* ─── Closing ────────────────────────────────────────────────────────────── */
+
+.d-closing {
+  font-family: 'EB Garamond', serif;
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.9;
+  color: #000000;
+}
+
+/* ─── Reset Link ─────────────────────────────────────────────────────────── */
+
+.d-reset-container {
+  text-align: center;
+  margin-top: 48px;
+}
+
+.d-reset-link {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: #000000;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.d-reset-link:hover {
+  opacity: 0.5;
+}
+
+/* ─── Streaming Cursor ───────────────────────────────────────────────────── */
+
+.d-streaming-cursor {
+  display: inline;
+  animation: streamBlink 0.8s step-end infinite;
+  opacity: 1;
+}
+
+@keyframes streamBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ─── Transcript Panel ───────────────────────────────────────────────────── */
+
+.d-transcript-section {
+  flex-shrink: 0;
+}
+
+.d-transcript-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 24px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+  border-top: 1px dotted #000000;
+}
+
+.d-transcript-toggle:hover {
+  opacity: 0.7;
+}
+
+.d-transcript-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #000000;
+}
+
+.d-transcript-arrow {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: #000000;
+}
+
+.d-transcript-body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 12px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.d-transcript-body::-webkit-scrollbar {
+  display: none;
+}
+
+.d-transcript-empty {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: #000000;
+  opacity: 0.3;
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.d-transcript-turn {
+  padding-left: 12px;
+  border-left: 2px solid #000000;
+}
+
+.d-transcript-turn--a {
+  border-left-color: #000000;
+}
+
+.d-transcript-turn--b {
+  border-left-color: #888888;
+}
+
+.d-transcript-speaker {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #000000;
+  margin-bottom: 2px;
+}
+
+.d-transcript-turn--b .d-transcript-speaker {
+  color: #666666;
+}
+
+.d-transcript-text {
+  font-family: 'EB Garamond', serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #000000;
+}
+
+/* ─── Connection Status ──────────────────────────────────────────────────── */
+
+.d-connection-status {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  color: #000000;
+  opacity: 0.25;
+  letter-spacing: 0.1em;
+  z-index: 5;
+  pointer-events: none;
+}

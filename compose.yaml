@@ -40,5 +40,19 @@ services:
     depends_on:
       - server
 
+  dialectic:
+    build:
+      context: ./client-1
+      target: dev
+    ports:
+      - "8080:8080"
+    environment:
+      VITE_BACKEND_WS_URL: ws://localhost:8000/ws/conversation
+    volumes:
+      - ./client-1:/app
+      - /app/node_modules
+    depends_on:
+      - server
+
 volumes:
   postgres_data:
