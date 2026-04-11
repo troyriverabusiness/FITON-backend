@@ -1,13 +1,52 @@
-# FITON-backend
+# FITON — Real-time Conversation Analysis
 
-## Running locally
+Two participants speak into a browser microphone; their audio streams over WebSocket to a FastAPI backend, where ElevenLabs Scribe v2 Realtime transcribes and diarizes the speech in real time, and Claude generates a live argument and counterargument for each speaker as the conversation unfolds — both displayed token-by-token in a split-screen Next.js UI.
 
-From the repo root:
+---
 
-1. Copy `.env.example` to `.env` and adjust values if needed.
-2. Run `docker compose up` (add `-d` to run in the background).
+## Local setup
 
-This starts Postgres and the API server (API on port `8000`, Postgres on `5432`).
+### Prerequisites
+
+- Python ≥ 3.14 with [uv](https://docs.astral.sh/uv/)
+- Node.js ≥ 20 with npm
+- Docker + Docker Compose (for Postgres)
+
+### 1. Clone and configure
+
+```bash
+git clone <repo-url>
+cd FITON-backend
+cp .env.example .env
+# Fill in ELEVENLABS_API_KEY and ANTHROPIC_API_KEY in .env
+```
+
+### 2. Start the database
+
+```bash
+docker compose up -d
+```
+
+### 3. Start the Python backend
+
+```bash
+cd server
+uv sync
+uv run uvicorn server.main:app --reload --port 8000
+```
+
+The API is now available at `http://localhost:8000`.  
+WebSocket endpoint: `ws://localhost:8000/ws/conversation`
+
+### 4. Start the Next.js frontend
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000` in your browser.
 
 ---
 
@@ -15,31 +54,53 @@ This starts Postgres and the API server (API on port `8000`, Postgres on `5432`)
 
 ```
 FITON-backend/
-├── compose.yaml              # Docker Compose — defines the API + Postgres containers
 ├── .env.example              # Copy to .env and fill in secrets
+├── compose.yaml              # Docker Compose — Postgres container
 │
-├── database/
-│   └── init/                 # SQL files that run once when Postgres first starts
-│       └── 001_create_users_table.sql   # Add new .sql files here for schema changes
+├── server/                   # FastAPI backend
+│   ├── main.py               # App entry point — registers routers
+│   ├── config.py             # Env-based config (API keys, model names, timeouts)
+│   ├── pyproject.toml        # Python dependencies
+│   │
+│   ├── ws/
+│   │   └── conversation.py   # WebSocket route — audio in, transcripts + args out
+│   │
+│   ├── models/
+│   │   └── turn.py           # Pydantic: Turn, SpeakerBuffer, ArgumentUpdate, SessionState
+│   │
+│   ├── services/
+│   │   ├── elevenlabs.py     # ElevenLabs Scribe v2 Realtime client
+│   │   └── claude.py         # Claude argument generation (streaming)
+│   │
+│   ├── routes/               # Existing HTTP routes (auth, etc.)
+│   ├── schemas/              # Existing Pydantic request/response models
+│   └── data_access/          # Existing DB layer (SQLAlchemy + Postgres)
 │
-└── server/                   # All Python / FastAPI code lives here
-    ├── main.py               # App entry point — registers routers and middleware
-    ├── pyproject.toml        # Python dependencies (add new packages here)
-    │
-    ├── routes/               # HTTP endpoints — one file per feature area
-    │   ├── user.py           # Auth routes: /auth/signup, /auth/login, /auth/me …
-    │   └── endpoints.py      # Placeholder routes (feed, effects) — flesh these out
-    │
-    ├── schemas/              # Request/response shapes (Pydantic models)
-    │   └── user.py           # UserCreate, UserLogin, UserOut — add new schemas here
-    │
-    ├── services/             # Business logic — called by routes, not by each other
-    │   └── auth.py           # signup_user, login_user, get_current_user
-    │
-    └── data_access/          # Everything that touches the database
-        ├── database.py       # DB connection, session factory, Base class
-        └── models/           # SQLAlchemy ORM table definitions
-            └── user.py       # User model — add new models (tables) here
+└── client/                   # Next.js 15 frontend (App Router, TypeScript)
+    ├── app/
+    │   ├── layout.tsx         # Root HTML shell + global CSS
+    │   └── page.tsx           # Main UI — transcript + argument panels
+    ├── lib/
+    │   └── socket.ts          # WebSocket client, mic capture, shared types
+    └── components/
+        ├── TranscriptPanel/   # Rolling live transcript, colour-coded by speaker
+        └── ArgumentPanel/     # Argument + counterargument per speaker, streams in
+```
+
+---
+
+## Data flow
+
+```
+Browser mic (PCM)
+  → [binary WS frame: 1-byte speaker tag + PCM]
+  → server/ws/conversation.py
+  → services/elevenlabs.py  (Scribe v2 Realtime WebSocket)
+  → TranscriptWord events → SessionState (Turn, SpeakerBuffer)
+  → services/claude.py      (on turn finalisation)
+  → ArgumentUpdate stream
+  → [JSON WS frame] → browser
+  → TranscriptPanel / ArgumentPanel
 ```
 
 ---
@@ -48,23 +109,10 @@ FITON-backend/
 
 | What you're adding | Where it goes |
 |---|---|
-| New API endpoint | `server/routes/` — create a new file (e.g. `workout.py`) and register its router in `main.py` |
-| Request/response body shape | `server/schemas/` — add a Pydantic class |
-| Business logic (calculations, rules) | `server/services/` — keep it out of routes |
-| Database query / data operation | `server/data_access/` — models go in `models/`, raw queries stay in `services/` for now |
-| New database table | `server/data_access/models/` **and** `database/init/` (new numbered `.sql` file) |
-| New Python package | Run `uv add <package>` inside `server/` — it updates `pyproject.toml` automatically |
-
----
-
-## Request flow
-
-```
-HTTP request
-  → routes/        (validate input with schema, call service)
-  → services/      (business logic, calls data_access)
-  → data_access/   (ORM model, DB session)
-  → Postgres
-```
-
-Keep this layering intact — routes should never query the DB directly, and models should have no business logic.
+| Scribe WebSocket integration | `server/services/elevenlabs.py` |
+| Claude prompt logic | `server/services/claude.py` |
+| WebSocket session orchestration | `server/ws/conversation.py` |
+| New Pydantic data shape | `server/models/turn.py` |
+| New env variable | `.env.example` + `server/config.py` |
+| Frontend socket logic | `client/lib/socket.ts` |
+| New UI component | `client/components/` |

@@ -1,15 +1,31 @@
 [project]
 name = "server"
 version = "0.1.0"
-description = "Add your description here"
+description = "FITON — Real-time conversation analysis with ElevenLabs Scribe and Claude"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    # ── Web framework ──────────────────────────────────────────────────────────
     "fastapi>=0.135.3",
-    "uvicorn>=0.44.0",
+    "uvicorn[standard]>=0.44.0",
+    "python-multipart>=0.0.9",
+
+    # ── Config / validation ────────────────────────────────────────────────────
+    "pydantic-settings>=2.0",
+
+    # ── ElevenLabs Scribe Realtime ─────────────────────────────────────────────
+    # TODO: Pin to the exact version once the Scribe v2 Realtime SDK is stable.
+    "elevenlabs>=1.0",
+    # Raw WebSocket support for the custom Scribe Realtime client.
+    "websockets>=13.0",
+
+    # ── Anthropic / Claude ─────────────────────────────────────────────────────
+    # TODO: Pin to the exact version once streaming argument generation is tested.
+    "anthropic>=0.30",
+
+    # ── Existing FITON dependencies ────────────────────────────────────────────
     "sqlalchemy>=2.0",
     "psycopg2-binary>=2.9",
     "passlib[bcrypt]>=1.7",
-    "python-multipart>=0.0.9",
     "itsdangerous>=2.1",
 ]
