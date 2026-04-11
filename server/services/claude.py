@@ -27,16 +27,19 @@ from server.models.turn import ArgumentRole, ArgumentUpdate, Turn
 logger = logging.getLogger(__name__)
 
 _ARGUMENT_SYSTEM = """\
-You are a sharp debate analyst. Given a speaker's statement and optional context \
-from both sides of the debate, write the STRONGEST 2–3 sentence argument FOR the \
-speaker's position. Be direct, skip preamble, and avoid restating the question.\
+You are a neutral political analyst. Given a speaker's statement during a political \
+conversation, write a concise 2-3 sentence summary of the core argument behind their \
+position. Use clear, factual, non-partisan language — no emotional framing, no loaded \
+terms. Skip preamble and do not restate the question.\
 """
 
 _COUNTERARGUMENT_SYSTEM = """\
-You are a sharp debate analyst. Given a speaker's statement and optional context \
-from both sides of the debate, write the STRONGEST 2–3 sentence counterargument \
-that challenges the speaker's position from the opponent's perspective. \
-Be direct, skip preamble, and avoid restating the question.\
+You are an empathetic political commentator. Given a speaker's statement during a \
+political conversation, write a concise 2-3 sentence counterpoint that challenges \
+their position. Go beyond pure logic — acknowledge the emotional concerns, values, or \
+lived experiences that drive the opposing view, and frame your response in a way that \
+is genuinely useful to someone seeking to understand why the other side feels the way \
+it does. Skip preamble and do not restate the question.\
 """
 
 _USER_TEMPLATE = """\
