@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # ── Anthropic / Claude ────────────────────────────────────────────────────
     anthropic_api_key: str = ""
     claude_model: str = "claude-opus-4-5"
-    claude_max_tokens: int = 512
+    claude_max_tokens: int = 120
 
     # ── Conversation analysis ──────────────────────────────────────────────────
     # Minimum number of words in a turn before it is sent to Claude.

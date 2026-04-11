@@ -30,6 +30,7 @@ interface ServerMessage {
   is_partial?: boolean;
   text?: string;
   message?: string;
+  tags?: string[];
 }
 
 const WS_URL =
@@ -57,6 +58,9 @@ export function useConversationSocket() {
   const [speakerAUpdates, setSpeakerAUpdates] = useState<ArgumentUpdate[]>([]);
   const [speakerBUpdates, setSpeakerBUpdates] = useState<ArgumentUpdate[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
+  // Emotion tags keyed by turn_id: { [turnId]: string[] }
+  const [speakerAEmotions, setSpeakerAEmotions] = useState<Record<string, string[]>>({});
+  const [speakerBEmotions, setSpeakerBEmotions] = useState<Record<string, string[]>>({});
 
   // ── Message handler (matches client/lib/socket.ts _handleMessage) ────────
 
@@ -116,6 +120,13 @@ export function useConversationSocket() {
         setIsProcessing(false);
         serverBusyRef.current = false;
         break;
+
+      case "emotion_tags": {
+        const setter =
+          msg.speaker === "speaker_a" ? setSpeakerAEmotions : setSpeakerBEmotions;
+        setter((prev) => ({ ...prev, [msg.turn_id!]: msg.tags ?? [] }));
+        break;
+      }
 
       case "error":
         setMicError(msg.message ?? "Unknown server error");
@@ -263,6 +274,8 @@ export function useConversationSocket() {
     setSpeakerAUpdates([]);
     setSpeakerBUpdates([]);
     setTranscripts([]);
+    setSpeakerAEmotions({});
+    setSpeakerBEmotions({});
     serverBusyRef.current = false;
     pendingBlobRef.current = null;
 
@@ -339,6 +352,8 @@ export function useConversationSocket() {
     micError,
     speakerAUpdates,
     speakerBUpdates,
+    speakerAEmotions,
+    speakerBEmotions,
     transcripts,
   };
 }

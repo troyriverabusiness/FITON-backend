@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   useConversationSocket,
   type ArgumentUpdate,
@@ -21,8 +21,8 @@ interface AccumulatedRole {
 // ─── Accumulator (mirrors client/components/ArgumentPanel _accumulateUpdates)
 
 function accumulateUpdates(updates: ArgumentUpdate[]): {
-  argument: AccumulatedRole;
-  counter: AccumulatedRole;
+  argument: AccumulatedRole & { turnId: string };
+  counter: AccumulatedRole & { turnId: string };
 } {
   let argText = "";
   let counterText = "";
@@ -52,8 +52,8 @@ function accumulateUpdates(updates: ArgumentUpdate[]): {
   }
 
   return {
-    argument: { text: argText, isFinal: argFinal, role: "argument" },
-    counter: { text: counterText, isFinal: counterFinal, role: "counterargument" },
+    argument: { text: argText, isFinal: argFinal, role: "argument", turnId: argTurnId },
+    counter: { text: counterText, isFinal: counterFinal, role: "counterargument", turnId: counterTurnId },
   };
 }
 
@@ -197,6 +197,28 @@ function LogoMark({ appState }: { appState: AppState }) {
   );
 }
 
+// ─── Emotion Pills ───────────────────────────────────────────────────────────
+
+function EmotionPills({ tags }: { tags: string[] }) {
+  return (
+    <div className="d-emotion-pills">
+      <AnimatePresence>
+        {tags.map((tag, i) => (
+          <motion.span
+            key={tag}
+            className="d-emotion-pill"
+            initial={{ opacity: 0, scale: 0.75, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {tag}
+          </motion.span>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Streaming Card ─────────────────────────────────────────────────────────
 
 function StreamingCard({ text, side, label }: { text: string; side: 'left' | 'right'; label: string }) {
@@ -221,12 +243,13 @@ function RoleCard({
   text,
   role,
   side,
+  emotions,
 }: {
   text: string;
   role: ArgumentRole;
   side: 'left' | 'right';
+  emotions?: string[];
 }) {
-  const [expanded, setExpanded] = useState(false);
   const roleLabel = role === 'counterargument' ? 'counter' : 'argument';
 
   return (
@@ -235,18 +258,10 @@ function RoleCard({
       initial={{ opacity: 0, x: side === 'left' ? -20 : 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      onClick={() => setExpanded(!expanded)}
     >
       <div className="d-arg-meta">{roleLabel}</div>
-      <div className="d-arg-headline">
-        {text.split(/\s+/).slice(0, 12).join(' ')}
-      </div>
-      <div
-        className="d-arg-transcript"
-        style={{ maxHeight: expanded ? '400px' : '0px' }}
-      >
-        {text}
-      </div>
+      <div className="d-arg-headline">{text}</div>
+      {emotions && emotions.length > 0 && <EmotionPills tags={emotions} />}
     </motion.div>
   );
 }
@@ -270,9 +285,11 @@ function EmptyPanel({ side }: { side: 'left' | 'right' }) {
 function SpeakerPanel({
   side,
   updates,
+  emotions,
 }: {
   side: 'left' | 'right';
   updates: ArgumentUpdate[];
+  emotions: Record<string, string[]>;
 }) {
   const { argument, counter } = useMemo(() => accumulateUpdates(updates), [updates]);
 
@@ -287,7 +304,15 @@ function SpeakerPanel({
 
   if (argument.text) {
     if (argument.isFinal) {
-      items.push(<RoleCard key="arg" text={argument.text} role="argument" side={side} />);
+      items.push(
+        <RoleCard
+          key="arg"
+          text={argument.text}
+          role="argument"
+          side={side}
+          emotions={emotions[argument.turnId]}
+        />
+      );
     } else {
       items.push(<StreamingCard key="arg-stream" text={argument.text} side={side} label="argument" />);
     }
@@ -361,12 +386,16 @@ function Canvas({
   audioLevel,
   speakerAUpdates,
   speakerBUpdates,
+  speakerAEmotions,
+  speakerBEmotions,
   isConnected,
 }: {
   appState: AppState;
   audioLevel: number;
   speakerAUpdates: ArgumentUpdate[];
   speakerBUpdates: ArgumentUpdate[];
+  speakerAEmotions: Record<string, string[]>;
+  speakerBEmotions: Record<string, string[]>;
   isConnected: boolean;
 }) {
   const isRecording = appState === 'recording';
@@ -382,7 +411,7 @@ function Canvas({
           <div className="d-panel-line" />
         </div>
         <div className="d-panel-content">
-          <SpeakerPanel side="left" updates={speakerAUpdates} />
+          <SpeakerPanel side="left" updates={speakerAUpdates} emotions={speakerAEmotions} />
         </div>
       </div>
 
@@ -392,7 +421,7 @@ function Canvas({
           <div className="d-panel-line" />
         </div>
         <div className="d-panel-content">
-          <SpeakerPanel side="right" updates={speakerBUpdates} />
+          <SpeakerPanel side="right" updates={speakerBUpdates} emotions={speakerBEmotions} />
         </div>
       </div>
 
@@ -416,6 +445,8 @@ export default function Dialectic() {
     isConnected,
     speakerAUpdates,
     speakerBUpdates,
+    speakerAEmotions,
+    speakerBEmotions,
     transcripts,
   } = useConversationSocket();
 
@@ -497,6 +528,8 @@ export default function Dialectic() {
           audioLevel={audioLevel}
           speakerAUpdates={speakerAUpdates}
           speakerBUpdates={speakerBUpdates}
+          speakerAEmotions={speakerAEmotions}
+          speakerBEmotions={speakerBEmotions}
           isConnected={isConnected}
         />
       </div>

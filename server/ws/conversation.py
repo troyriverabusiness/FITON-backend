@@ -166,6 +166,19 @@ async def conversation_ws(websocket: WebSocket) -> None:
                         "turn_id": turn_id,
                     })
 
+                    # Emotion tags — non-blocking, fires after arguments are done.
+                    try:
+                        tags = await claude.generate_emotions(turn)
+                        if tags:
+                            await websocket.send_json({
+                                "type": "emotion_tags",
+                                "speaker": speaker.value,
+                                "turn_id": turn_id,
+                                "tags": tags,
+                            })
+                    except Exception as exc:
+                        logger.warning("Emotion tags error for turn %s: %s", turn_id, exc)
+
             # ── Text: control messages ─────────────────────────────────────────
             elif "text" in message and message["text"]:
                 try:

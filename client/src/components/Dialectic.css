@@ -205,7 +205,6 @@
 
 .d-arg-card {
   margin-bottom: 28px;
-  cursor: pointer;
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -222,37 +221,23 @@
   text-align: right;
 }
 
-.d-arg-card:hover .d-arg-headline {
-  letter-spacing: 0.01em;
-}
-
 .d-arg-meta {
   font-family: 'Space Mono', monospace;
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   color: #000000;
-  opacity: 0.4;
+  margin-bottom: 8px;
+  border-bottom: 1.5px solid #000000;
+  padding-bottom: 6px;
 }
 
 .d-arg-headline {
   font-family: 'EB Garamond', serif;
-  font-style: italic;
   font-size: 18px;
-  line-height: 1.5;
+  line-height: 1.75;
   color: #000000;
-  margin-top: 6px;
-  transition: letter-spacing 0.3s ease;
-}
-
-.d-arg-transcript {
-  font-family: 'Space Mono', monospace;
-  font-size: 10px;
-  line-height: 1.7;
-  color: #000000;
-  opacity: 0.55;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
   margin-top: 6px;
 }
 
@@ -809,4 +794,28 @@
   letter-spacing: 0.1em;
   z-index: 5;
   pointer-events: none;
+}
+
+/* ─── Emotion Pills ──────────────────────────────────────────────────────── */
+
+.d-emotion-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.d-emotion-pill {
+  display: inline-block;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  color: #000000;
+  border: 1px solid #000000;
+  border-radius: 99px;
+  padding: 2px 8px;
+  opacity: 0.55;
+  white-space: nowrap;
 }

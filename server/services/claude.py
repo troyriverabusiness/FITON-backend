@@ -4,8 +4,9 @@ Streams two pieces of analysis for each completed speaker turn:
   1. ARGUMENT       — the strongest case FOR the speaker's position.
   2. COUNTERARGUMENT — the strongest case AGAINST it (opponent's POV).
 
-Both are streamed token-by-token so the frontend can render them
-progressively in the ArgumentPanel.
+After both stream, a third non-streaming call extracts emotion tags
+(e.g. ["passionate", "defensive"]) that describe how the speaker
+delivered the argument.
 
 Streaming strategy: two sequential ``client.messages.stream()`` calls
 (one per role).  Running them sequentially keeps the UI update order
@@ -16,6 +17,7 @@ Reference: https://docs.anthropic.com/en/api/messages-streaming
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator
 
@@ -27,21 +29,32 @@ from server.models.turn import ArgumentRole, ArgumentUpdate, Turn
 logger = logging.getLogger(__name__)
 
 _ARGUMENT_SYSTEM = """\
-You are a neutral political analyst. Given a speaker's statement during a political \
-conversation, write a concise 2-3 sentence summary of the core argument behind their \
-position. Use clear, factual, non-partisan language — no emotional framing, no loaded \
-terms. Skip preamble and do not restate the question.\
+You are a neutral political analyst. Distill the speaker's core argument into exactly \
+1-2 sentences. Use precise, plain language — every word must earn its place. No \
+preamble, no filler, no restatement. Write so that someone glancing for two seconds \
+understands the position instantly.\
 """
 
 _COUNTERARGUMENT_SYSTEM = """\
-You are an empathetic political commentator. Given a speaker's statement during a \
-political conversation, write a concise 2-3 sentence counterpoint that challenges \
-their position. Go beyond pure logic — acknowledge the emotional concerns, values, or \
-lived experiences that drive the opposing view, and frame your response in a way that \
-is genuinely useful to someone seeking to understand why the other side feels the way \
-it does. Skip preamble and do not restate the question.\
+You are a neutral political analyst. State the strongest opposing argument in exactly \
+1-2 sentences. Use precise, plain language — every word must earn its place. No \
+preamble, no filler, no restatement. Write so that someone glancing for two seconds \
+grasps the challenge instantly.\
 """
 
+_EMOTION_SYSTEM = """\
+You are a speech analyst. Given a speaker's statement, return a JSON array of 2-4 \
+lowercase single-word or two-word emotion/tone labels that describe how the speaker \
+sounds (e.g. ["passionate", "defensive", "personally motivated"]). \
+Return only valid JSON — no prose, no markdown.\
+"""
+
+_EMOTION_USER_TEMPLATE = """\
+## {speaker} just said:
+"{turn_text}"
+
+Return the emotion labels as a JSON array.\
+"""
 _USER_TEMPLATE = """\
 ## {speaker} just said:
 "{turn_text}"
@@ -63,6 +76,33 @@ class ClaudeService:
         self._model = settings.claude_model
         self._max_tokens = settings.claude_max_tokens
         self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    async def generate_emotions(self, turn: Turn) -> list[str]:
+        """Return a list of emotion/tone labels for the speaker's turn.
+
+        Makes a single non-streaming call and parses the JSON array Claude
+        returns.  Falls back to an empty list on any error so it never
+        blocks the pipeline.
+        """
+        speaker_label = turn.speaker.value.replace("_", " ").title()
+        user_prompt = _EMOTION_USER_TEMPLATE.format(
+            speaker=speaker_label,
+            turn_text=turn.text,
+        )
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=60,
+                system=_EMOTION_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = response.content[0].text.strip()
+            tags = json.loads(raw)
+            if isinstance(tags, list):
+                return [str(t) for t in tags]
+        except Exception as exc:
+            logger.warning("Emotion extraction failed for turn %s: %s", turn.turn_id, exc)
+        return []
 
     async def generate_arguments(
         self,
