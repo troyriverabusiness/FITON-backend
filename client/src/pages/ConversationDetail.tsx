@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import NavDrawer from "../components/NavDrawer";
 import "./ConversationDetail.css";
 
 const API_BASE =
@@ -22,6 +23,7 @@ interface ConversationData {
   created_at: string;
   ended_at: string | null;
   turns: TurnData[];
+  title: string | null;
 }
 
 async function fetchConversation(id: string): Promise<ConversationData> {
@@ -139,16 +141,23 @@ export default function ConversationDetail() {
 
   return (
     <div className="cd-root">
-      <header className="cd-header">
-        <Link to="/conversations" className="cd-back">&larr; all conversations</Link>
-        <div className="cd-title">Conversation</div>
-        {conversation && (
-          <div className="cd-meta-line">
-            {formatDate(conversation.created_at)} &middot;{" "}
-            {formatTime(conversation.created_at)} &middot;{" "}
-            {conversation.turns.length} turns
+      <header className="page-header">
+        <NavDrawer />
+        <div className="page-header-center">
+          <div className="page-header-title">
+            {conversation?.title ?? "Conversation"}
           </div>
-        )}
+          {conversation && (
+            <div className="page-header-subtitle">
+              {formatDate(conversation.created_at)} &middot;{" "}
+              {formatTime(conversation.created_at)} &middot;{" "}
+              {conversation.turns.length} turns
+            </div>
+          )}
+        </div>
+        <div className="page-header-right">
+          <Link to="/conversations" className="page-back-link">&larr; back</Link>
+        </div>
       </header>
 
       <div className="cd-thread">

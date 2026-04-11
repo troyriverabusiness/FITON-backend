@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from server.db import init_db
+from server.routes.briefing import router as briefing_router
+from server.routes.chat import router as chat_router
 from server.routes.conversations import router as conversations_router
 from server.ws.conversation import router as conversation_router
 
@@ -44,6 +46,8 @@ app.add_middleware(
 
 app.include_router(conversation_router, tags=["conversation"])
 app.include_router(conversations_router)
+app.include_router(briefing_router)
+app.include_router(chat_router)
 
 
 @app.get("/health", tags=["meta"])

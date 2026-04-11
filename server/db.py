@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from server.config import get_settings
@@ -21,4 +22,11 @@ async def init_db() -> None:
     """Create all tables if they don't already exist."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add title column to existing tables that predate this field.
+        await conn.execute(
+            text(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS "
+                "title VARCHAR(200)"
+            )
+        )
     logger.info("Database tables ensured")

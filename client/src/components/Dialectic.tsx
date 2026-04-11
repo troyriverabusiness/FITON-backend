@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   useConversationSocket,
@@ -7,6 +6,7 @@ import {
   type ArgumentRole,
   type TranscriptEntry,
 } from '../hooks/useConversationSocket';
+import NavDrawer from './NavDrawer';
 import './Dialectic.css';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -62,10 +62,13 @@ function accumulateUpdates(updates: ArgumentUpdate[]): {
 
 function Header() {
   return (
-    <header className="d-header">
-      <div className="d-header-title">FITON</div>
-      <div className="d-header-subtitle">a real-time argument recorder</div>
-      <Link to="/conversations" className="d-history-link">past conversations</Link>
+    <header className="page-header d-header">
+      <NavDrawer />
+      <div className="page-header-center">
+        <div className="page-header-title">FITON</div>
+        <div className="page-header-subtitle">a real-time argument recorder</div>
+      </div>
+      <div className="page-header-right" />
     </header>
   );
 }

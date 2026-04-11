@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import NavDrawer from "../components/NavDrawer";
 import "./ConversationHistory.css";
 
 const API_BASE =
@@ -10,6 +11,7 @@ interface ConversationSummary {
   created_at: string;
   ended_at: string | null;
   turn_count: number;
+  title: string | null;
 }
 
 async function fetchConversations(): Promise<ConversationSummary[]> {
@@ -52,10 +54,13 @@ export default function ConversationHistory() {
 
   return (
     <div className="ch-root">
-      <header className="ch-header">
-        <Link to="/" className="ch-back">&larr; back</Link>
-        <div className="ch-title">Past Conversations</div>
-        <div className="ch-subtitle">review previous debates</div>
+      <header className="page-header">
+        <NavDrawer />
+        <div className="page-header-center">
+          <div className="page-header-title">History</div>
+          <div className="page-header-subtitle">past debates</div>
+        </div>
+        <div className="page-header-right" />
       </header>
 
       <div className="ch-content">
@@ -70,6 +75,9 @@ export default function ConversationHistory() {
           <div className="ch-list">
             {conversations.map((c) => (
               <Link key={c.id} to={`/conversations/${c.id}`} className="ch-card">
+                <div className="ch-card-title">
+                  {c.title ?? formatDate(c.created_at)}
+                </div>
                 <div className="ch-card-row">
                   <span className="ch-card-date">{formatDate(c.created_at)}</span>
                   <span className="ch-card-time">{formatTime(c.created_at)}</span>

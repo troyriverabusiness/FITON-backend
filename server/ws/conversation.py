@@ -209,6 +209,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     await _save_conversation(
                         session_id, session_start, turn_order,
                         arg_accumulator, emotion_accumulator,
+                        claude,
                     )
                     state.is_active = False
                     await websocket.send_json({"type": "session_ended"})
@@ -263,10 +264,13 @@ async def _save_conversation(
     turn_order: list[tuple[str, str, str]],
     arg_accumulator: dict[str, dict[str, str]],
     emotion_accumulator: dict[str, list[str]],
+    claude: ClaudeService,
 ) -> None:
     """Persist the completed conversation and its turns to the database."""
     if not turn_order:
         return
+
+    title = await claude.generate_title([(spk, txt) for _, spk, txt in turn_order])
 
     try:
         async with async_session() as session:
@@ -274,6 +278,7 @@ async def _save_conversation(
                 id=uuid.UUID(session_id),
                 created_at=started_at,
                 ended_at=datetime.now(timezone.utc),
+                title=title,
             )
             session.add(conversation)
 

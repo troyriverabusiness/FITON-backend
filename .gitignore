@@ -39,3 +39,5 @@ db/dumps/
 # Cursor
 .cursorignore
 .cursorindexingignore
+
+client/node_modules

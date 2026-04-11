@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 
 import anthropic
@@ -40,6 +41,41 @@ You are a neutral political analyst. State the strongest opposing argument in ex
 1-2 sentences. Use precise, plain language — every word must earn its place. No \
 preamble, no filler, no restatement. Write so that someone glancing for two seconds \
 grasps the challenge instantly.\
+"""
+
+_BRIEFING_SYSTEM = """\
+You are a debate coach. Given a topic and a list of counterarguments that have \
+been used against this person in past debates, identify the 3–5 most recurring \
+argument patterns. For each pattern, provide:\
+  - "argument": a 1-sentence summary of the opposing argument\
+  - "rebuttal": a 2–3 sentence rebuttal the person can use\
+If the past-counterarguments list is empty, generate the 3–5 most common \
+arguments people make on this topic from general knowledge.\
+Return ONLY valid JSON matching this schema — no prose, no markdown:\
+{"patterns": [{"argument": "...", "rebuttal": "..."}]}\
+"""
+
+_BRIEFING_USER_TEMPLATE = """\
+## Debate topic:
+"{topic}"
+
+## Counterarguments used against me in past debates (one per line):
+{counterarguments}
+
+Identify the recurring patterns and generate rebuttals now.\
+"""
+
+_TITLE_SYSTEM = """\
+You are a debate archivist. Given a conversation transcript, write a concise 4-7 word \
+title that captures the main topic or theme debated. \
+Return ONLY the title — no quotes, no trailing punctuation, no explanation.\
+"""
+
+_TITLE_USER_TEMPLATE = """\
+## Debate transcript:
+{transcript}
+
+Write the title now.\
 """
 
 _EMOTION_SYSTEM = """\
@@ -69,6 +105,15 @@ Write the {role} now.\
 """
 
 
+_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?\s*```$", re.DOTALL)
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Remove ```json ... ``` wrappers that Claude sometimes adds despite instructions."""
+    m = _FENCE_RE.match(text.strip())
+    return m.group(1).strip() if m else text
+
+
 class ClaudeService:
     """Async wrapper around the Anthropic Messages API with streaming."""
 
@@ -76,6 +121,42 @@ class ClaudeService:
         self._model = settings.claude_model
         self._max_tokens = settings.claude_max_tokens
         self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    async def generate_briefing(
+        self,
+        topic: str,
+        counterarguments: list[str],
+    ) -> list[dict[str, str]]:
+        """Analyse past counterarguments for a topic and return pattern/rebuttal pairs.
+
+        Returns a list of dicts like ``[{"argument": "...", "rebuttal": "..."}]``.
+        Falls back to Claude's general knowledge when no past data exists.
+        """
+        ca_block = "\n".join(f"- {ca}" for ca in counterarguments) if counterarguments else "(none)"
+        user_prompt = _BRIEFING_USER_TEMPLATE.format(
+            topic=topic,
+            counterarguments=ca_block,
+        )
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=1024,
+                system=_BRIEFING_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = response.content[0].text.strip()
+            raw = _strip_markdown_fences(raw)
+            data = json.loads(raw)
+            patterns = data.get("patterns", [])
+            if isinstance(patterns, list):
+                return [
+                    {"argument": str(p.get("argument", "")), "rebuttal": str(p.get("rebuttal", ""))}
+                    for p in patterns
+                    if isinstance(p, dict)
+                ]
+        except Exception as exc:
+            logger.error("Briefing generation failed for topic %r: %s", topic, exc)
+        return []
 
     async def generate_emotions(self, turn: Turn) -> list[str]:
         """Return a list of emotion/tone labels for the speaker's turn.
@@ -103,6 +184,34 @@ class ClaudeService:
         except Exception as exc:
             logger.warning("Emotion extraction failed for turn %s: %s", turn.turn_id, exc)
         return []
+
+    async def generate_title(
+        self,
+        turns: list[tuple[str, str]],  # (speaker, text) pairs
+    ) -> str | None:
+        """Return a short title summarising the conversation topic.
+
+        Builds a brief transcript from the first several turns and asks Claude
+        for a 4-7 word label.  Falls back to ``None`` on any error so callers
+        can degrade gracefully.
+        """
+        snippet = "\n".join(
+            f"{'Speaker A' if spk == 'speaker_a' else 'Speaker B'}: {txt}"
+            for spk, txt in turns[:10]
+        )
+        user_prompt = _TITLE_USER_TEMPLATE.format(transcript=snippet)
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=30,
+                system=_TITLE_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            title = response.content[0].text.strip().strip('"').strip("'")
+            return title if title else None
+        except Exception as exc:
+            logger.warning("Title generation failed: %s", exc)
+            return None
 
     async def generate_arguments(
         self,

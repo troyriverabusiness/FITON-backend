@@ -35,6 +35,7 @@ class ConversationSummary(BaseModel):
     created_at: str
     ended_at: str | None
     turn_count: int
+    title: str | None
 
 
 class ConversationDetail(BaseModel):
@@ -42,6 +43,7 @@ class ConversationDetail(BaseModel):
     created_at: str
     ended_at: str | None
     turns: list[TurnOut]
+    title: str | None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ async def list_conversations():
                 Conversation.id,
                 Conversation.created_at,
                 Conversation.ended_at,
+                Conversation.title,
                 func.count(DBTurn.id).label("turn_count"),
             )
             .outerjoin(DBTurn)
@@ -70,6 +73,7 @@ async def list_conversations():
             created_at=row.created_at.isoformat(),
             ended_at=row.ended_at.isoformat() if row.ended_at else None,
             turn_count=row.turn_count,
+            title=row.title,
         )
         for row in rows
     ]
@@ -99,6 +103,7 @@ async def get_conversation(conversation_id: str):
         id=str(conversation.id),
         created_at=conversation.created_at.isoformat(),
         ended_at=conversation.ended_at.isoformat() if conversation.ended_at else None,
+        title=conversation.title,
         turns=[
             TurnOut(
                 id=str(t.id),
