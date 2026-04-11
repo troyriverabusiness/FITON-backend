@@ -128,20 +128,32 @@ export class ConversationSocket {
     if (this.mediaRecorder?.state === "recording") return;
 
     this.chunks = [];
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : "audio/webm";
 
-    console.log("[Socket] Recording started — mimeType:", mimeType);
-    const recorder = new MediaRecorder(this.micStream, { mimeType });
+    // Pick the best supported MIME type in priority order.
+    // Chrome/Firefox support webm/opus; Safari/iOS only support mp4/aac.
+    // Falling back to "" lets the browser choose its own default so
+    // MediaRecorder never throws on construction.
+    const mimeType = (
+      ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+        .find((t) => MediaRecorder.isTypeSupported(t))
+    ) ?? "";
+
+    console.log("[Socket] Recording started — mimeType:", mimeType || "(browser default)");
+    const recorder = new MediaRecorder(
+      this.micStream,
+      mimeType ? { mimeType } : undefined,
+    );
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.chunks.push(e.data);
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(this.chunks, { type: "audio/webm" });
-      console.log("[Socket] Recording stopped —", (blob.size / 1024).toFixed(1), "KB, sending…");
+      // Use the recorder's actual mimeType (may differ from what we requested
+      // if the browser overrode it) so the Blob type matches the byte content.
+      const actualType = recorder.mimeType || mimeType || "audio/webm";
+      const blob = new Blob(this.chunks, { type: actualType });
+      console.log("[Socket] Recording stopped —", (blob.size / 1024).toFixed(1), "KB, type:", actualType, "sending…");
       this.chunks = [];
       this._sendBlob(blob);
     };

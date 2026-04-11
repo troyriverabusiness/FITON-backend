@@ -95,7 +95,10 @@ class SpeakerDiarizer:
         audio_bytes: bytes,
         sample_rate: int = 16_000,
     ) -> list[dict]:
-        """Diarize + transcribe audio bytes (webm/opus from MediaRecorder).
+        """Diarize + transcribe audio bytes from the browser (any MediaRecorder format).
+
+        Accepts webm/opus, mp4/aac, or any container ffmpeg can probe — format
+        is detected from the byte content, not a file extension.
 
         Returns::
 
@@ -104,29 +107,29 @@ class SpeakerDiarizer:
 
         Always call via ``asyncio.to_thread`` — this method is synchronous.
         """
-        # Browser sends audio/webm;codecs=opus (MediaRecorder format).
-        # Neither pyannote nor soundfile can open webm directly.
-        # Use ffmpeg (installed in the container) to convert to 16kHz mono WAV first.
-        fd_webm, webm_path = tempfile.mkstemp(suffix=".webm")
-        os.close(fd_webm)
+        # Pipe audio bytes into ffmpeg via stdin so it probes the format from
+        # the actual content rather than a file extension.  This handles all
+        # containers the browser may send (webm/opus on Chrome/Firefox,
+        # mp4/aac on Safari/iOS) without needing a format-specific temp file.
         fd_wav, tmp_path = tempfile.mkstemp(suffix=".wav")
         os.close(fd_wav)
         try:
-            with open(webm_path, "wb") as f:
-                f.write(audio_bytes)
-
-            subprocess.run(
+            proc = subprocess.run(
                 [
                     "ffmpeg", "-y",
-                    "-i", webm_path,
+                    "-i", "pipe:0",
                     "-ar", "16000",
                     "-ac", "1",
                     "-f", "wav",
                     tmp_path,
                 ],
-                check=True,
+                input=audio_bytes,
                 capture_output=True,
             )
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    proc.stderr.decode(errors="replace").strip().splitlines()[-1]
+                )
 
             diarization = self._pipeline(tmp_path, min_speakers=2, max_speakers=2)
 
@@ -171,11 +174,10 @@ class SpeakerDiarizer:
 
             return result
         finally:
-            for path in (webm_path, tmp_path):
-                try:
-                    os.unlink(path)
-                except OSError:
-                    pass
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 diarizer = SpeakerDiarizer()
