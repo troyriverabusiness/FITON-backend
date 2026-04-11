@@ -184,7 +184,9 @@ class ElevenLabsScribeService:
                 f"vad_silence_threshold_secs={self._vad_silence_secs}",
             ]
         )
-        return f"{_WS_BASE}?{params}"
+        url = f"{_WS_BASE}?{params}"
+        logger.info("Scribe URL: %s", url)
+        return url
 
     async def _do_connect(self) -> None:
         """Open WS, await session_started, spawn reader task."""
@@ -251,12 +253,22 @@ class ElevenLabsScribeService:
                     if text:
                         await self._safe_enqueue(PartialTranscriptEvent(text=text))
 
-                elif msg_type in (
-                    "committed_transcript_with_timestamps",
-                    "committed_transcript",
-                ):
+                elif msg_type == "committed_transcript_with_timestamps":
+                    # We always request include_timestamps=true, so ElevenLabs
+                    # sends both committed_transcript_with_timestamps AND
+                    # committed_transcript for the same segment. We process only
+                    # the timestamped variant (which also carries speaker_id) and
+                    # ignore the plain one to avoid emitting duplicate events.
                     text = data.get("text", "")
                     raw_words: list[dict[str, Any]] = data.get("words") or []
+                    speaker_ids = [
+                        w.get("speaker_id") for w in raw_words if w.get("type") == "word"
+                    ]
+                    logger.info(
+                        "Scribe committed: %r | speaker_ids=%s",
+                        text[:60],
+                        speaker_ids,
+                    )
                     words = [
                         CommittedWord(
                             text=w["text"],
@@ -271,6 +283,10 @@ class ElevenLabsScribeService:
                     await self._safe_enqueue(
                         CommittedTranscriptEvent(text=text, words=words)
                     )
+
+                elif msg_type == "committed_transcript":
+                    # Duplicate of committed_transcript_with_timestamps — skip.
+                    logger.debug("Scribe: ignoring redundant committed_transcript")
 
                 elif msg_type == "session_started":
                     pass  # already handled in _do_connect

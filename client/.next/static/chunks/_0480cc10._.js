@@ -467,55 +467,94 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
 
 /**
  * ConversationSocket — manages the WebSocket connection to the server and
- * captures microphone audio as raw PCM for forwarding.
+ * captures microphone audio for forwarding.
  *
  * Audio pipeline:
- *   getUserMedia (mono, 16 kHz)
- *   → AudioContext (sampleRate: 16 000)
- *   → ScriptProcessorNode (bufferSize: 4 096 = ~256 ms)
- *   → Float32 → Int16 PCM conversion
- *   → binary WebSocket frame → server → ElevenLabs Scribe
+ *   getUserMedia → MediaRecorder (webm/opus)
+ *   → user holds record button → chunks accumulated
+ *   → user releases → complete Blob → ArrayBuffer → binary WebSocket frame
+ *   → server → pyannote diarization → faster-whisper transcription → Claude
  *
  * Server → browser message types:
- *   transcript        — live partial or committed text per speaker
- *   turn_complete     — a speaker turn was finalised
- *   argument_update   — streaming token from Claude
+ *   processing       — audio received, being analysed
+ *   no_speech        — nothing detected in the recording
+ *   transcript       — diarized + transcribed segment per speaker
+ *   turn_complete    — a speaker turn was finalised
+ *   argument_update  — streaming token from Claude
  *   argument_complete — Claude finished for this turn
- *   error             — server-side error string
- *   session_ended     — graceful session close
- */ // ── Shared types (re-exported for use in React components) ─────────────────
+ *   error            — server-side error string
+ *   session_ended    — graceful session close
+ */ // ── Shared types ───────────────────────────────────────────────────────────────
 __turbopack_context__.s([
     "ConversationSocket",
     ()=>ConversationSocket
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/@swc/helpers/esm/_define_property.js [app-client] (ecmascript)");
 ;
-// ── PCM constants ─────────────────────────────────────────────────────────────
-const TARGET_SAMPLE_RATE = 16_000;
-const SCRIPT_PROCESSOR_BUFFER = 4_096; // ~256 ms at 16 kHz
 class ConversationSocket {
     // ── Lifecycle ──────────────────────────────────────────────────────────────
-    /** Connect WebSocket, then request mic access and start streaming. */ async connect() {
+    async connect() {
         await this._openWebSocket();
-        await this._startMic();
+        // Request mic permission up front so there's no delay on first hold.
+        await this._initMic();
     }
-    /** Send end_session control message and release all resources. */ async disconnect() {
-        this._stopMic();
+    async disconnect() {
+        this.stopRecording();
+        this._releaseMic();
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({
                 type: "end_session"
             }));
-            // Give the server a moment to acknowledge before hard-closing.
             await new Promise((resolve)=>setTimeout(resolve, 300));
             this.ws.close(1000, "user-disconnect");
         }
         this.ws = null;
     }
-    // ── Private: WebSocket ─────────────────────────────────────────────────────
+    // ── Recording ──────────────────────────────────────────────────────────────
+    /** Start capturing audio. Call when the user presses the record button. */ startRecording() {
+        var _this_mediaRecorder;
+        if (!this.micStream) {
+            console.warn("[Socket] startRecording called but no mic stream");
+            return;
+        }
+        if (((_this_mediaRecorder = this.mediaRecorder) === null || _this_mediaRecorder === void 0 ? void 0 : _this_mediaRecorder.state) === "recording") return;
+        this.chunks = [];
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+        console.log("[Socket] Recording started — mimeType:", mimeType);
+        const recorder = new MediaRecorder(this.micStream, {
+            mimeType
+        });
+        recorder.ondataavailable = (e)=>{
+            if (e.data.size > 0) this.chunks.push(e.data);
+        };
+        recorder.onstop = ()=>{
+            const blob = new Blob(this.chunks, {
+                type: "audio/webm"
+            });
+            console.log("[Socket] Recording stopped —", (blob.size / 1024).toFixed(1), "KB, sending…");
+            this.chunks = [];
+            this._sendBlob(blob);
+        };
+        this.mediaRecorder = recorder;
+        recorder.start();
+    }
+    /** Stop capturing and send the recording. Call on button release. */ stopRecording() {
+        var _this_mediaRecorder;
+        if (((_this_mediaRecorder = this.mediaRecorder) === null || _this_mediaRecorder === void 0 ? void 0 : _this_mediaRecorder.state) === "recording") {
+            console.log("[Socket] Stopping recording…");
+            this.mediaRecorder.stop();
+        }
+        this.mediaRecorder = null;
+    }
+    get isRecording() {
+        var _this_mediaRecorder;
+        return ((_this_mediaRecorder = this.mediaRecorder) === null || _this_mediaRecorder === void 0 ? void 0 : _this_mediaRecorder.state) === "recording";
+    }
+    // ── Private ────────────────────────────────────────────────────────────────
     async _openWebSocket() {
+        console.log("[Socket] Connecting to", this.wsUrl);
         return new Promise((resolve, reject)=>{
             const ws = new WebSocket(this.wsUrl);
-            ws.binaryType = "arraybuffer";
             const timeout = setTimeout(()=>{
                 ws.close();
                 reject(new Error("WebSocket connection timed out"));
@@ -524,32 +563,82 @@ class ConversationSocket {
                 var _this_callbacks_onConnected, _this_callbacks;
                 clearTimeout(timeout);
                 this.ws = ws;
+                console.log("[Socket] Connected");
                 (_this_callbacks_onConnected = (_this_callbacks = this.callbacks).onConnected) === null || _this_callbacks_onConnected === void 0 ? void 0 : _this_callbacks_onConnected.call(_this_callbacks);
                 resolve();
             };
             ws.onerror = (ev)=>{
                 clearTimeout(timeout);
-                reject(new Error("WebSocket error during connect"));
+                console.error("[Socket] Connection error", ev);
+                reject(new Error("WebSocket connection failed"));
             };
-            ws.onclose = ()=>{
+            ws.onclose = (ev)=>{
                 var _this_callbacks_onDisconnected, _this_callbacks;
+                console.log("[Socket] Closed — code:", ev.code, "reason:", ev.reason);
                 (_this_callbacks_onDisconnected = (_this_callbacks = this.callbacks).onDisconnected) === null || _this_callbacks_onDisconnected === void 0 ? void 0 : _this_callbacks_onDisconnected.call(_this_callbacks);
             };
-            ws.onmessage = (ev)=>this._handleServerMessage(ev.data);
+            ws.onmessage = (ev)=>this._handleMessage(ev.data);
         });
     }
-    _handleServerMessage(raw) {
+    async _initMic() {
+        console.log("[Socket] Requesting microphone…");
+        try {
+            this.micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 16_000
+                }
+            });
+            console.log("[Socket] Microphone granted");
+        } catch (err) {
+            var _this_callbacks_onError, _this_callbacks;
+            const msg = err instanceof DOMException && err.name === "NotAllowedError" ? "Microphone permission denied. Please allow mic access and try again." : "Could not access microphone: ".concat(err.message);
+            console.error("[Socket] Mic error:", msg);
+            (_this_callbacks_onError = (_this_callbacks = this.callbacks).onError) === null || _this_callbacks_onError === void 0 ? void 0 : _this_callbacks_onError.call(_this_callbacks, msg);
+            throw new Error(msg);
+        }
+    }
+    _releaseMic() {
+        var _this_micStream;
+        (_this_micStream = this.micStream) === null || _this_micStream === void 0 ? void 0 : _this_micStream.getTracks().forEach((t)=>t.stop());
+        this.micStream = null;
+        console.log("[Socket] Microphone released");
+    }
+    _sendBlob(blob) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn("[Socket] Cannot send — WebSocket not open");
+            return;
+        }
+        console.log("[Socket] Sending audio blob —", (blob.size / 1024).toFixed(1), "KB");
+        blob.arrayBuffer().then((buf)=>{
+            var _this_ws;
+            return (_this_ws = this.ws) === null || _this_ws === void 0 ? void 0 : _this_ws.send(buf);
+        });
+    }
+    _handleMessage(raw) {
         let msg;
         try {
             msg = JSON.parse(raw);
         } catch (e) {
-            console.warn("[ConversationSocket] Non-JSON message:", raw);
+            console.warn("[Socket] Non-JSON message:", raw);
             return;
         }
+        console.log("[Socket] ←", msg.type, msg);
         switch(msg.type){
+            case "processing":
+                var _this_callbacks_onProcessing, _this_callbacks;
+                (_this_callbacks_onProcessing = (_this_callbacks = this.callbacks).onProcessing) === null || _this_callbacks_onProcessing === void 0 ? void 0 : _this_callbacks_onProcessing.call(_this_callbacks);
+                break;
+            case "no_speech":
+                var _this_callbacks_onNoSpeech, _this_callbacks1;
+                console.warn("[Socket] No speech detected in recording");
+                (_this_callbacks_onNoSpeech = (_this_callbacks1 = this.callbacks).onNoSpeech) === null || _this_callbacks_onNoSpeech === void 0 ? void 0 : _this_callbacks_onNoSpeech.call(_this_callbacks1);
+                break;
             case "transcript":
-                var _this_callbacks_onTranscript, _this_callbacks;
-                (_this_callbacks_onTranscript = (_this_callbacks = this.callbacks).onTranscript) === null || _this_callbacks_onTranscript === void 0 ? void 0 : _this_callbacks_onTranscript.call(_this_callbacks, {
+                var _this_callbacks_onTranscript, _this_callbacks2;
+                (_this_callbacks_onTranscript = (_this_callbacks2 = this.callbacks).onTranscript) === null || _this_callbacks_onTranscript === void 0 ? void 0 : _this_callbacks_onTranscript.call(_this_callbacks2, {
                     turnId: msg.turn_id,
                     speaker: msg.speaker,
                     text: msg.text,
@@ -557,12 +646,12 @@ class ConversationSocket {
                 });
                 break;
             case "turn_complete":
-                var _this_callbacks_onTurnComplete, _this_callbacks1;
-                (_this_callbacks_onTurnComplete = (_this_callbacks1 = this.callbacks).onTurnComplete) === null || _this_callbacks_onTurnComplete === void 0 ? void 0 : _this_callbacks_onTurnComplete.call(_this_callbacks1, msg.speaker, msg.turn_id);
+                var _this_callbacks_onTurnComplete, _this_callbacks3;
+                (_this_callbacks_onTurnComplete = (_this_callbacks3 = this.callbacks).onTurnComplete) === null || _this_callbacks_onTurnComplete === void 0 ? void 0 : _this_callbacks_onTurnComplete.call(_this_callbacks3, msg.speaker, msg.turn_id);
                 break;
             case "argument_update":
-                var _this_callbacks_onArgumentUpdate, _this_callbacks2;
-                (_this_callbacks_onArgumentUpdate = (_this_callbacks2 = this.callbacks).onArgumentUpdate) === null || _this_callbacks_onArgumentUpdate === void 0 ? void 0 : _this_callbacks_onArgumentUpdate.call(_this_callbacks2, {
+                var _this_callbacks_onArgumentUpdate, _this_callbacks4;
+                (_this_callbacks_onArgumentUpdate = (_this_callbacks4 = this.callbacks).onArgumentUpdate) === null || _this_callbacks_onArgumentUpdate === void 0 ? void 0 : _this_callbacks_onArgumentUpdate.call(_this_callbacks4, {
                     turnId: msg.turn_id,
                     speaker: msg.speaker,
                     role: msg.role,
@@ -571,100 +660,31 @@ class ConversationSocket {
                 });
                 break;
             case "argument_complete":
-                var _this_callbacks_onArgumentComplete, _this_callbacks3;
-                (_this_callbacks_onArgumentComplete = (_this_callbacks3 = this.callbacks).onArgumentComplete) === null || _this_callbacks_onArgumentComplete === void 0 ? void 0 : _this_callbacks_onArgumentComplete.call(_this_callbacks3, msg.speaker, msg.turn_id);
+                var _this_callbacks_onArgumentComplete, _this_callbacks5;
+                (_this_callbacks_onArgumentComplete = (_this_callbacks5 = this.callbacks).onArgumentComplete) === null || _this_callbacks_onArgumentComplete === void 0 ? void 0 : _this_callbacks_onArgumentComplete.call(_this_callbacks5, msg.speaker, msg.turn_id);
                 break;
             case "error":
-                var _this_callbacks_onError, _this_callbacks4;
-                console.error("[ConversationSocket] Server error:", msg.message);
-                (_this_callbacks_onError = (_this_callbacks4 = this.callbacks).onError) === null || _this_callbacks_onError === void 0 ? void 0 : _this_callbacks_onError.call(_this_callbacks4, msg.message);
+                var _this_callbacks_onError, _this_callbacks6;
+                console.error("[Socket] Server error:", msg.message);
+                (_this_callbacks_onError = (_this_callbacks6 = this.callbacks).onError) === null || _this_callbacks_onError === void 0 ? void 0 : _this_callbacks_onError.call(_this_callbacks6, msg.message);
                 break;
             case "session_ended":
-                var _this_callbacks_onSessionEnded, _this_callbacks5;
-                this._stopMic();
-                (_this_callbacks_onSessionEnded = (_this_callbacks5 = this.callbacks).onSessionEnded) === null || _this_callbacks_onSessionEnded === void 0 ? void 0 : _this_callbacks_onSessionEnded.call(_this_callbacks5);
+                var _this_callbacks_onSessionEnded, _this_callbacks7;
+                this._releaseMic();
+                (_this_callbacks_onSessionEnded = (_this_callbacks7 = this.callbacks).onSessionEnded) === null || _this_callbacks_onSessionEnded === void 0 ? void 0 : _this_callbacks_onSessionEnded.call(_this_callbacks7);
                 break;
-        }
-    }
-    // ── Private: mic capture ───────────────────────────────────────────────────
-    async _startMic() {
-        let micStream;
-        try {
-            micStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    channelCount: 1,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    // Request 16 kHz; the browser will resample if needed.
-                    sampleRate: TARGET_SAMPLE_RATE
-                }
-            });
-        } catch (err) {
-            var _this_callbacks_onError, _this_callbacks;
-            const message = err instanceof DOMException && err.name === "NotAllowedError" ? "Microphone permission denied. Please allow mic access and try again." : "Could not access microphone: ".concat(err.message);
-            (_this_callbacks_onError = (_this_callbacks = this.callbacks).onError) === null || _this_callbacks_onError === void 0 ? void 0 : _this_callbacks_onError.call(_this_callbacks, message);
-            throw new Error(message);
-        }
-        this.stream = micStream;
-        // Create an AudioContext that processes audio at exactly 16 kHz.
-        this.audioCtx = new AudioContext({
-            sampleRate: TARGET_SAMPLE_RATE
-        });
-        this.sourceNode = this.audioCtx.createMediaStreamSource(micStream);
-        // ScriptProcessorNode is deprecated but universally supported.
-        // Buffer size 4096 at 16 kHz ≈ 256 ms per callback.
-        this.processorNode = this.audioCtx.createScriptProcessor(SCRIPT_PROCESSOR_BUFFER, 1, 1 // output channels
-        );
-        this.processorNode.onaudioprocess = (ev)=>{
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-            const float32 = ev.inputBuffer.getChannelData(0);
-            const int16 = _float32ToInt16(float32);
-            this.ws.send(int16.buffer);
-        };
-        // source → processor → destination keeps the graph alive.
-        this.sourceNode.connect(this.processorNode);
-        this.processorNode.connect(this.audioCtx.destination);
-    }
-    _stopMic() {
-        if (this.processorNode) {
-            this.processorNode.disconnect();
-            this.processorNode.onaudioprocess = null;
-            this.processorNode = null;
-        }
-        if (this.sourceNode) {
-            this.sourceNode.disconnect();
-            this.sourceNode = null;
-        }
-        if (this.audioCtx) {
-            this.audioCtx.close().catch(()=>{});
-            this.audioCtx = null;
-        }
-        if (this.stream) {
-            this.stream.getTracks().forEach((t)=>t.stop());
-            this.stream = null;
         }
     }
     constructor(wsUrl, callbacks = {}){
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "ws", null);
-        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "audioCtx", null);
-        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "sourceNode", null);
-        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "processorNode", null);
-        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "stream", null);
+        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "mediaRecorder", null);
+        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "chunks", []);
+        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "micStream", null);
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "wsUrl", void 0);
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "callbacks", void 0);
         this.wsUrl = wsUrl;
         this.callbacks = callbacks;
     }
-}
-// ── Utility ───────────────────────────────────────────────────────────────────
-/** Convert Float32 PCM samples in [-1, 1] to Int16 little-endian PCM. */ function _float32ToInt16(float32) {
-    const out = new Int16Array(float32.length);
-    for(let i = 0; i < float32.length; i++){
-        const clamped = Math.max(-1, Math.min(1, float32[i]));
-        out[i] = clamped < 0 ? clamped * 32_768 : clamped * 32_767;
-    }
-    return out;
 }
 if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelpers !== null) {
     __turbopack_context__.k.registerExports(__turbopack_context__.m, globalThis.$RefreshHelpers$);
@@ -697,9 +717,8 @@ function HomePage() {
     const socketRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const [status, setStatus] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("idle");
     const [errorMsg, setErrorMsg] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
-    // Transcript entries keyed by turnId — replaced in-place when final arrives.
+    const [recordState, setRecordState] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("idle");
     const [transcriptEntries, setTranscriptEntries] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
-    // Argument updates per speaker (accumulated; panels accumulate internally).
     const [speakerAUpdates, setSpeakerAUpdates] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [speakerBUpdates, setSpeakerBUpdates] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     // ── Transcript handler ─────────────────────────────────────────────────────
@@ -710,14 +729,10 @@ function HomePage() {
                     const idx = prev.findIndex({
                         "HomePage.useCallback[handleTranscript].idx": (e)=>e.turnId === entry.turnId
                     }["HomePage.useCallback[handleTranscript].idx"]);
-                    if (idx === -1) {
-                        // New turn — append.
-                        return [
-                            ...prev,
-                            entry
-                        ];
-                    }
-                    // Replace the existing entry (partial → final, or partial → updated partial).
+                    if (idx === -1) return [
+                        ...prev,
+                        entry
+                    ];
                     const next = [
                         ...prev
                     ];
@@ -746,26 +761,28 @@ function HomePage() {
         setTranscriptEntries([]);
         setSpeakerAUpdates([]);
         setSpeakerBUpdates([]);
+        setRecordState("idle");
         const socket = new __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$socket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["ConversationSocket"](WS_URL, {
             onConnected: ()=>setStatus("connected"),
             onDisconnected: ()=>{
                 setStatus("idle");
+                setRecordState("idle");
                 socketRef.current = null;
             },
             onTranscript: handleTranscript,
             onArgumentUpdate: handleArgumentUpdate,
-            onTurnComplete: (_speaker, _turnId)=>{
-            // No-op: UI updates happen via argument_update events.
-            },
-            onArgumentComplete: (_speaker, _turnId)=>{
-            // No-op: panels lock themselves when isFinal=true.
-            },
+            onTurnComplete: ()=>{},
+            onArgumentComplete: ()=>{},
+            onProcessing: ()=>setRecordState("processing"),
+            onNoSpeech: ()=>setRecordState("idle"),
             onError: (msg)=>{
                 setErrorMsg(msg);
                 setStatus("error");
+                setRecordState("idle");
             },
             onSessionEnded: ()=>{
                 setStatus("idle");
+                setRecordState("idle");
                 socketRef.current = null;
             }
         });
@@ -784,8 +801,21 @@ function HomePage() {
             socketRef.current = null;
         }
         setStatus("idle");
+        setRecordState("idle");
     }
-    // Clean up on unmount.
+    // ── Recording ──────────────────────────────────────────────────────────────
+    function handlePressRecord() {
+        var _socketRef_current;
+        if (recordState !== "idle") return;
+        (_socketRef_current = socketRef.current) === null || _socketRef_current === void 0 ? void 0 : _socketRef_current.startRecording();
+        setRecordState("recording");
+    }
+    function handleReleaseRecord() {
+        var _socketRef_current;
+        if (recordState !== "recording") return;
+        (_socketRef_current = socketRef.current) === null || _socketRef_current === void 0 ? void 0 : _socketRef_current.stopRecording();
+    // stays "processing" until the server responds
+    }
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "HomePage.useEffect": ()=>{
             return ({
@@ -801,6 +831,8 @@ function HomePage() {
     // ── Render ─────────────────────────────────────────────────────────────────
     const isConnected = status === "connected";
     const isConnecting = status === "connecting";
+    const recordLabel = recordState === "recording" ? "🎙 Recording… release to send" : recordState === "processing" ? "Analysing…" : "Hold to record — both speakers";
+    const recordColor = recordState === "recording" ? "#ff6b6b" : recordState === "processing" ? "#f5a623" : "#4f9eff";
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
         style: styles.main,
         children: [
@@ -812,7 +844,7 @@ function HomePage() {
                         children: "Conversation Analysis"
                     }, void 0, false, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 123,
+                        lineNumber: 139,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -823,7 +855,7 @@ function HomePage() {
                                 children: errorMsg
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 126,
+                                lineNumber: 142,
                                 columnNumber: 24
                             }, this),
                             !isConnected && !isConnecting ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -832,7 +864,7 @@ function HomePage() {
                                 children: "Start Session"
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 129,
+                                lineNumber: 145,
                                 columnNumber: 13
                             }, this) : isConnecting ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                                 style: {
@@ -843,7 +875,7 @@ function HomePage() {
                                 children: "Connecting…"
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 133,
+                                lineNumber: 149,
                                 columnNumber: 13
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                                 style: styles.btnEnd,
@@ -851,43 +883,88 @@ function HomePage() {
                                 children: "End Session"
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 137,
+                                lineNumber: 153,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 125,
+                        lineNumber: 141,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 122,
+                lineNumber: 138,
                 columnNumber: 7
             }, this),
             isConnected && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                style: styles.recordingBar,
+                style: styles.recordRow,
                 children: [
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                        style: styles.recordingDot
-                    }, void 0, false, {
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        style: styles.statusBar,
+                        children: [
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                style: {
+                                    ...styles.dot,
+                                    background: recordColor,
+                                    animation: recordState === "idle" ? "none" : "pulse 1.4s ease-in-out infinite"
+                                }
+                            }, void 0, false, {
+                                fileName: "[project]/app/page.tsx",
+                                lineNumber: 163,
+                                columnNumber: 13
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                style: styles.statusLabel,
+                                children: recordLabel
+                            }, void 0, false, {
+                                fileName: "[project]/app/page.tsx",
+                                lineNumber: 170,
+                                columnNumber: 13
+                            }, this)
+                        ]
+                    }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 147,
+                        lineNumber: 162,
                         columnNumber: 11
                     }, this),
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                        style: styles.recordingLabel,
-                        children: "Recording — speak now"
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                        style: {
+                            ...styles.recordBtn,
+                            background: recordState === "recording" ? "#ff6b6b" : recordState === "processing" ? "#f5a623" : "#4f9eff",
+                            opacity: recordState === "processing" ? 0.6 : 1,
+                            cursor: recordState === "processing" ? "default" : "pointer"
+                        },
+                        onMouseDown: handlePressRecord,
+                        onMouseUp: handleReleaseRecord,
+                        onMouseLeave: ()=>{
+                            if (recordState === "recording") handleReleaseRecord();
+                        },
+                        onTouchStart: (e)=>{
+                            e.preventDefault();
+                            handlePressRecord();
+                        },
+                        onTouchEnd: handleReleaseRecord,
+                        disabled: recordState === "processing",
+                        children: recordState === "recording" ? "Release to send" : recordState === "processing" ? "Analysing…" : "Hold to record"
                     }, void 0, false, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 148,
+                        lineNumber: 173,
+                        columnNumber: 11
+                    }, this),
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                        style: styles.hint,
+                        children: "Both speakers can talk — pyannote detects who said what automatically."
+                    }, void 0, false, {
+                        fileName: "[project]/app/page.tsx",
+                        lineNumber: 196,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 146,
+                lineNumber: 161,
                 columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -899,12 +976,12 @@ function HomePage() {
                             entries: transcriptEntries
                         }, void 0, false, {
                             fileName: "[project]/app/page.tsx",
-                            lineNumber: 154,
+                            lineNumber: 204,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 153,
+                        lineNumber: 203,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
@@ -916,7 +993,7 @@ function HomePage() {
                                 updates: speakerAUpdates
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 158,
+                                lineNumber: 207,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ArgumentPanel$2f$ArgumentPanel$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["ArgumentPanel"], {
@@ -925,29 +1002,29 @@ function HomePage() {
                                 updates: speakerBUpdates
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 163,
+                                lineNumber: 208,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 157,
+                        lineNumber: 206,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 152,
+                lineNumber: 202,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/page.tsx",
-        lineNumber: 121,
+        lineNumber: 137,
         columnNumber: 5
     }, this);
 }
-_s(HomePage, "cCyjIjydClkBVe7JTnxBBY+sQkE=");
+_s(HomePage, "CLmL7GRr+iAGX0LVBr24Ip4aMkk=");
 _c = HomePage;
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const styles = {
@@ -1005,26 +1082,46 @@ const styles = {
         cursor: "pointer",
         fontSize: "0.875rem"
     },
-    recordingBar: {
+    recordRow: {
         display: "flex",
-        alignItems: "center",
-        gap: "0.5rem",
+        flexDirection: "column",
+        gap: "0.75rem",
         flexShrink: 0
     },
-    recordingDot: {
+    statusBar: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem"
+    },
+    dot: {
         width: "8px",
         height: "8px",
         borderRadius: "50%",
-        background: "#ff6b6b",
-        animation: "pulse 1.4s ease-in-out infinite",
-        display: "inline-block"
+        display: "inline-block",
+        flexShrink: 0
     },
-    recordingLabel: {
+    statusLabel: {
         fontSize: "0.75rem",
         color: "var(--color-text-muted)",
         letterSpacing: "0.04em",
         textTransform: "uppercase",
         fontWeight: 500
+    },
+    recordBtn: {
+        padding: "0.9rem 1rem",
+        borderRadius: "10px",
+        border: "none",
+        color: "#fff",
+        fontWeight: 700,
+        fontSize: "1rem",
+        transition: "background 0.1s",
+        userSelect: "none",
+        WebkitUserSelect: "none"
+    },
+    hint: {
+        fontSize: "0.75rem",
+        color: "var(--color-text-muted)",
+        margin: 0
     },
     body: {
         display: "flex",

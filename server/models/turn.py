@@ -147,3 +147,7 @@ class SessionState(BaseModel):
     # Ordered list of all turns across both speakers, for rendering the transcript.
     transcript: list[Turn] = Field(default_factory=list)
     is_active: bool = True
+    # Last speaker indicated by the client-side prefix byte (0x00=A, 0x01=B).
+    # Updated by the receive loop; used to attribute committed transcripts when
+    # Scribe does not return per-word speaker_ids.
+    hint_speaker: SpeakerLabel = SpeakerLabel.SPEAKER_A

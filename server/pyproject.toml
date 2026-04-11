@@ -1,27 +1,30 @@
 [project]
 name = "server"
 version = "0.1.0"
-description = "FITON — Real-time conversation analysis with ElevenLabs Scribe and Claude"
+description = "FITON — Real-time conversation analysis with pyannote + Claude"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     # ── Web framework ──────────────────────────────────────────────────────────
-    "fastapi>=0.135.3",
-    "uvicorn[standard]>=0.44.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
 
     # ── Config / validation ────────────────────────────────────────────────────
     "pydantic-settings>=2.0",
-
-    # ── ElevenLabs Scribe Realtime ─────────────────────────────────────────────
-    # TODO: Pin to the exact version once the Scribe v2 Realtime SDK is stable.
-    "elevenlabs>=1.0",
-    # Raw WebSocket support for the custom Scribe Realtime client.
-    "websockets>=13.0",
+    "python-dotenv>=1.0",
 
     # ── Anthropic / Claude ─────────────────────────────────────────────────────
-    # TODO: Pin to the exact version once streaming argument generation is tested.
     "anthropic>=0.30",
+
+    # ── Speaker diarization ────────────────────────────────────────────────────
+    "pyannote.audio==3.3.2",
+    "faster-whisper==1.1.0",
+    "torch==2.3.0",
+    "torchaudio==2.3.0",
+    "numpy==1.26.4",
+    "soundfile==0.12.1",
+    "librosa==0.10.2",
 
     # ── Existing FITON dependencies ────────────────────────────────────────────
     "sqlalchemy>=2.0",

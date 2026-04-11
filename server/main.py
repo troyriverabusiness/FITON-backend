@@ -1,20 +1,28 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.ws.conversation import router as conversation_router
 
-# TODO: Import and include existing FITON routers here as the project grows.
+# Importing diarizer triggers model loading at startup so the first
+# WebSocket connection doesn't pay the cold-start penalty.
+from server.services.diarization import diarizer  # noqa: F401
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s [%(name)s] %(message)s",
+)
 
 app = FastAPI(
     title="FITON — Real-time Conversation Analysis",
     description=(
-        "WebSocket-based backend: audio → ElevenLabs Scribe v2 Realtime "
-        "→ Claude argument generation."
+        "WebSocket-based backend: audio → pyannote diarization "
+        "→ faster-whisper transcription → Claude argument generation."
     ),
-    version="0.1.0",
+    version="0.2.0",
 )
 
-# TODO: Tighten CORS origins for production — restrict to the deployed client URL.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,20 +31,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ────────────────────────────────────────────────────────────────────
-
 app.include_router(conversation_router, tags=["conversation"])
-
-# TODO: Register additional HTTP routers (auth, users, etc.) from server/routes/.
-
-
-# ── Health check ───────────────────────────────────────────────────────────────
 
 
 @app.get("/health", tags=["meta"])
 def health_check():
-    """Liveness probe — returns 200 when the server is accepting requests."""
-    return {"status": "ok"}
+    """Liveness probe."""
+    return {
+        "status": "ok",
+        "diarizer_ready": diarizer is not None,
+    }
 
 
 if __name__ == "__main__":

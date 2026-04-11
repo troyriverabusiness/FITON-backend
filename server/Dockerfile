@@ -1,25 +1,38 @@
-FROM python:3.14-slim
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+# System libs required by librosa / soundfile / pyannote
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies before copying source for better layer caching.
-# This layer is invalidated only when pyproject.toml or uv.lock changes.
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# Install Python deps before copying source for layer caching.
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir \
+    "huggingface_hub==0.24.7" \
+    fastapi \
+    "uvicorn[standard]" \
+    python-multipart \
+    "pydantic-settings>=2.0" \
+    python-dotenv \
+    "anthropic>=0.30" \
+    "pyannote.audio==3.3.2" \
+    "faster-whisper==1.1.0" \
+    "torch==2.3.0" \
+    "torchaudio==2.3.0" \
+    "numpy==1.26.4" \
+    "soundfile==0.12.1" \
+    "librosa==0.10.2" \
+    sqlalchemy \
+    psycopg2-binary \
+    "passlib[bcrypt]" \
+    itsdangerous
 
-# Copy the server source into /app/server/ so that "from server.X import Y"
-# resolves correctly when uvicorn is launched from /app.
+# Copy source into /app/server/ so "from server.X import Y" resolves correctly.
 COPY . ./server/
-
-# Install the project itself (deps are already cached above).
-RUN uv sync --frozen --no-dev
-
-ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 

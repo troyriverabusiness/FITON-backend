@@ -4,29 +4,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # ── ElevenLabs ────────────────────────────────────────────────────────────
-    elevenlabs_api_key: str = ""
-    # Scribe v2 Realtime model identifier (confirmed from ElevenLabs API docs).
-    elevenlabs_scribe_model: str = "scribe_v2_realtime"
-    # Silence threshold sent to Scribe's VAD — commits a segment after this
-    # many seconds of silence within the audio stream.
-    scribe_vad_silence_secs: float = 1.5
-
     # ── Anthropic / Claude ────────────────────────────────────────────────────
     anthropic_api_key: str = ""
     claude_model: str = "claude-opus-4-5"
     claude_max_tokens: int = 512
 
     # ── Conversation analysis ──────────────────────────────────────────────────
-    # Seconds of silence (after the last Scribe commit) before Claude is called.
-    silence_timeout_seconds: float = 1.5
     # Minimum number of words in a turn before it is sent to Claude.
     min_turn_words: int = 3
 
+    # ── Speaker diarization (pyannote.audio) ──────────────────────────────────
+    # HuggingFace token — required to download pyannote/speaker-diarization-3.1.
+    # Create one at huggingface.co/settings/tokens (read access).
+    # Accept model terms at:
+    #   huggingface.co/pyannote/speaker-diarization-3.1
+    #   huggingface.co/pyannote/segmentation-3.0
+    #   huggingface.co/pyannote/embedding
+    hf_token: str = ""
+
     # ── WebSocket / server ────────────────────────────────────────────────────
-    # Raw PCM audio expected from the browser: 16 kHz, 16-bit, mono.
     audio_sample_rate: int = 16_000
-    audio_channels: int = 1
     max_sessions: int = 50
 
     # ── Existing FITON DB (kept for compatibility) ────────────────────────────
