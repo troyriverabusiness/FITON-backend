@@ -27,10 +27,9 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import tempfile
 
-import numpy as np
-import soundfile as sf
 import torch
 from faster_whisper import WhisperModel
 from pyannote.audio import Pipeline
@@ -96,7 +95,7 @@ class SpeakerDiarizer:
         audio_bytes: bytes,
         sample_rate: int = 16_000,
     ) -> list[dict]:
-        """Diarize + transcribe raw 16-bit PCM bytes.
+        """Diarize + transcribe audio bytes (webm/opus from MediaRecorder).
 
         Returns::
 
@@ -105,13 +104,29 @@ class SpeakerDiarizer:
 
         Always call via ``asyncio.to_thread`` — this method is synchronous.
         """
-        audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
-        audio_float = audio_array.astype(np.float32) / 32_768.0
-
-        fd, tmp_path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
+        # Browser sends audio/webm;codecs=opus (MediaRecorder format).
+        # Neither pyannote nor soundfile can open webm directly.
+        # Use ffmpeg (installed in the container) to convert to 16kHz mono WAV first.
+        fd_webm, webm_path = tempfile.mkstemp(suffix=".webm")
+        os.close(fd_webm)
+        fd_wav, tmp_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd_wav)
         try:
-            sf.write(tmp_path, audio_float, sample_rate)
+            with open(webm_path, "wb") as f:
+                f.write(audio_bytes)
+
+            subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", webm_path,
+                    "-ar", "16000",
+                    "-ac", "1",
+                    "-f", "wav",
+                    tmp_path,
+                ],
+                check=True,
+                capture_output=True,
+            )
 
             diarization = self._pipeline(tmp_path, min_speakers=2, max_speakers=2)
 
@@ -156,10 +171,11 @@ class SpeakerDiarizer:
 
             return result
         finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+            for path in (webm_path, tmp_path):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
 
 diarizer = SpeakerDiarizer()
