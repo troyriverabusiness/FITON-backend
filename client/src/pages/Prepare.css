@@ -236,6 +236,50 @@
   white-space: nowrap;
 }
 
+/* ─── Confidence Bar ──────────────────────────────────────────────────────── */
+
+.pr-conf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.pr-conf-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #000;
+  opacity: 0.38;
+  flex-shrink: 0;
+  min-width: 82px;
+}
+
+.pr-conf-track {
+  flex: 1;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.pr-conf-fill {
+  height: 100%;
+  background: #000;
+  transition: width 0.5s ease;
+}
+
+.pr-conf-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: #000;
+  opacity: 0.38;
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: right;
+}
+
 .pr-card-divider {
   width: 32px;
   height: 1px;

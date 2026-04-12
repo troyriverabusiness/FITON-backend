@@ -81,6 +81,9 @@
 }
 
 .cd-emotion-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: 'Space Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.04em;
@@ -88,6 +91,55 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
   color: #000000;
   opacity: 0.65;
+}
+
+.cd-emotion-pill-conf {
+  font-size: 8px;
+  opacity: 0.55;
+  letter-spacing: 0;
+}
+
+/* ─── Confidence Bar ──────────────────────────────────────────────────────── */
+
+.cd-conf-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cd-conf-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.4;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.cd-conf-track {
+  flex: 1;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.cd-conf-fill {
+  height: 100%;
+  background: #000000;
+  transition: width 0.5s ease;
+}
+
+.cd-conf-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: #000000;
+  opacity: 0.4;
+  flex-shrink: 0;
+  min-width: 26px;
+  text-align: right;
 }
 
 /* ─── Expand / Collapse ───────────────────────────────────────────────────── */

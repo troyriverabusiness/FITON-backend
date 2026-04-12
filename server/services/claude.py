@@ -43,6 +43,38 @@ preamble, no filler, no restatement. Write so that someone glancing for two seco
 grasps the challenge instantly.\
 """
 
+_ARGUMENT_CONFIDENCE_SYSTEM = """\
+You are a quality auditor for AI argument analysis. Given a speaker's statement and \
+the two AI-generated summaries (argument and counterargument), rate how confidently \
+the AI could extract each from the actual speech. Consider:
+  - Clarity: did the speaker state a clear position?
+  - Completeness: was the speaker's reasoning actually present?
+  - Ambiguity: could the speech be interpreted multiple ways?
+  - Relevance: are the summaries grounded in what was said vs. assumed?
+
+Score each 0–100:
+  90–100  Speaker's position is unambiguous; summary is a faithful distillation
+  70–89   Mostly clear with minor gaps or inferences
+  40–69   Partially clear; meaningful interpretation was required
+  0–39    Very vague, off-topic, or fragmented speech; summary is largely inferred
+
+Return ONLY valid JSON — no prose, no markdown:
+{"argument": <int 0-100>, "counterargument": <int 0-100>}\
+"""
+
+_ARGUMENT_CONFIDENCE_USER_TEMPLATE = """\
+## Speaker said:
+"{turn_text}"
+
+## AI extracted argument:
+"{argument_text}"
+
+## AI extracted counterargument:
+"{counterargument_text}"
+
+Rate confidence now.\
+"""
+
 _BRIEFING_SYSTEM = """\
 You are an empathetic debate coach. Given a topic and a list of counterarguments \
 that have been used against this person in past debates, identify the 3–5 most \
@@ -55,10 +87,14 @@ recurring argument patterns. For each pattern provide:\
     emotional tenor of this argument (e.g. ["fearful", "protective", "distrustful"])\
   - "rebuttal": 2–3 sentences that acknowledge the emotional reality first, \
     then offer a substantive counter — do NOT ignore the emotions, address them\
+  - "confidence": integer 0–100 — how confident you are that this pattern is \
+    genuinely prevalent and well-supported by the data (or general knowledge if \
+    no past data). 90–100 = very common / well-evidenced; 60–89 = moderately \
+    common; 0–59 = speculative or rarely encountered\
 If the past-counterarguments list is empty, generate the 3–5 most common \
 arguments people make on this topic from general knowledge.\
 Return ONLY valid JSON matching this schema — no prose, no markdown:\
-{"patterns": [{"argument": "...", "emotional_drivers": "...", "emotion_tags": ["...", "..."], "rebuttal": "..."}]}\
+{"patterns": [{"argument": "...", "emotional_drivers": "...", "emotion_tags": ["...", "..."], "rebuttal": "...", "confidence": 85}]}\
 """
 
 _BRIEFING_USER_TEMPLATE = """\
@@ -86,9 +122,41 @@ Write the title now.\
 
 _EMOTION_SYSTEM = """\
 You are a speech analyst. Given a speaker's statement, return a JSON array of 2-4 \
-lowercase single-word or two-word emotion/tone labels that describe how the speaker \
-sounds (e.g. ["passionate", "defensive", "personally motivated"]). \
+objects, each with a lowercase single-word or two-word emotion/tone label and a \
+confidence score (0–100) indicating how clearly that emotion comes through. \
+Example: [{"tag": "passionate", "confidence": 88}, {"tag": "defensive", "confidence": 72}] \
 Return only valid JSON — no prose, no markdown.\
+"""
+
+_MEDIATION_SYSTEM = """\
+You are an AI mediator silently observing a live conversation. Analyze the recent \
+exchange and decide if you need to intervene. Intervene ONLY when you detect a clear \
+pattern — do not intervene on healthy debate or normal disagreement:
+
+  - off_topic: The conversation has drifted significantly from its original subject.
+  - escalating: Tone is becoming hostile, aggressive, or personally attacking.
+  - emotional: One or both speakers are showing strong distress that may block \
+    productive dialogue.
+
+If no intervention is needed, return exactly the JSON null.
+
+If intervention IS needed, return a JSON object with these fields:
+  - "trigger": one of "off_topic", "escalating", "emotional"
+  - "severity": "low" (gentle nudge) or "high" (urgent redirect)
+  - "message": 1-2 sentences — empathetic, non-lecturing, constructive. \
+    Encourage understanding, not compliance.
+
+Return ONLY valid JSON (the object or null) — no prose, no markdown.\
+"""
+
+_MEDIATION_USER_TEMPLATE = """\
+## Recent conversation ({n} turns):
+{transcript}
+
+## Recent emotion signals per turn:
+{emotions}
+
+Does this conversation need mediation?\
 """
 
 _EMOTION_USER_TEMPLATE = """\
@@ -132,10 +200,10 @@ class ClaudeService:
         self,
         topic: str,
         counterarguments: list[str],
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, object]]:
         """Analyse past counterarguments for a topic and return pattern/rebuttal pairs.
 
-        Returns a list of dicts like ``[{"argument": "...", "rebuttal": "..."}]``.
+        Returns a list of dicts like ``[{"argument": "...", "rebuttal": "...", "confidence": 85}]``.
         Falls back to Claude's general knowledge when no past data exists.
         """
         ca_block = "\n".join(f"- {ca}" for ca in counterarguments) if counterarguments else "(none)"
@@ -162,6 +230,7 @@ class ClaudeService:
                         "emotional_drivers": str(p.get("emotional_drivers", "")),
                         "emotion_tags": [str(t) for t in p.get("emotion_tags", []) if t],
                         "rebuttal": str(p.get("rebuttal", "")),
+                        "confidence": int(p["confidence"]) if isinstance(p.get("confidence"), (int, float)) else None,
                     }
                     for p in patterns
                     if isinstance(p, dict)
@@ -170,12 +239,11 @@ class ClaudeService:
             logger.error("Briefing generation failed for topic %r: %s — raw: %.300s", topic, exc, raw if 'raw' in dir() else '(no response)')
         return []
 
-    async def generate_emotions(self, turn: Turn) -> list[str]:
-        """Return a list of emotion/tone labels for the speaker's turn.
+    async def generate_emotions(self, turn: Turn) -> list[dict[str, object]]:
+        """Return a list of emotion/tone labels with confidence scores for the speaker's turn.
 
-        Makes a single non-streaming call and parses the JSON array Claude
-        returns.  Falls back to an empty list on any error so it never
-        blocks the pipeline.
+        Each item is ``{"tag": "passionate", "confidence": 88}`` (confidence 0–100).
+        Falls back to an empty list on any error so it never blocks the pipeline.
         """
         speaker_label = turn.speaker.value.replace("_", " ").title()
         user_prompt = _EMOTION_USER_TEMPLATE.format(
@@ -185,17 +253,61 @@ class ClaudeService:
         try:
             response = await self._client.messages.create(
                 model=self._model,
-                max_tokens=60,
+                max_tokens=120,
                 system=_EMOTION_SYSTEM,
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw = response.content[0].text.strip()
-            tags = json.loads(raw)
-            if isinstance(tags, list):
-                return [str(t) for t in tags]
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                result: list[dict[str, object]] = []
+                for item in parsed:
+                    if isinstance(item, dict) and "tag" in item:
+                        result.append({
+                            "tag": str(item["tag"]),
+                            "confidence": int(item["confidence"]) if isinstance(item.get("confidence"), (int, float)) else None,
+                        })
+                    elif isinstance(item, str):
+                        # Graceful fallback if model returns plain strings.
+                        result.append({"tag": item, "confidence": None})
+                return result
         except Exception as exc:
             logger.warning("Emotion extraction failed for turn %s: %s", turn.turn_id, exc)
         return []
+
+    async def generate_argument_confidence(
+        self,
+        turn: Turn,
+        argument_text: str,
+        counterargument_text: str,
+    ) -> dict[str, int | None]:
+        """Rate AI confidence (0–100) in the argument and counterargument extractions.
+
+        Returns ``{"argument": 85, "counterargument": 72}`` or ``None`` values on failure.
+        """
+        user_prompt = _ARGUMENT_CONFIDENCE_USER_TEMPLATE.format(
+            turn_text=turn.text,
+            argument_text=argument_text or "(none generated)",
+            counterargument_text=counterargument_text or "(none generated)",
+        )
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=40,
+                system=_ARGUMENT_CONFIDENCE_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = response.content[0].text.strip()
+            raw = _strip_markdown_fences(raw)
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return {
+                    "argument": int(parsed["argument"]) if isinstance(parsed.get("argument"), (int, float)) else None,
+                    "counterargument": int(parsed["counterargument"]) if isinstance(parsed.get("counterargument"), (int, float)) else None,
+                }
+        except Exception as exc:
+            logger.warning("Argument confidence rating failed for turn %s: %s", turn.turn_id, exc)
+        return {"argument": None, "counterargument": None}
 
     async def generate_title(
         self,
@@ -224,6 +336,52 @@ class ClaudeService:
         except Exception as exc:
             logger.warning("Title generation failed: %s", exc)
             return None
+
+    async def generate_mediation(
+        self,
+        recent_turns: list[tuple[str, str]],  # (speaker, text) pairs
+        emotion_signals: list[tuple[str, list[str]]],  # (speaker, tags) pairs
+    ) -> dict | None:
+        """Analyse recent conversation turns and return a mediation alert if needed.
+
+        Returns a dict like ``{"trigger": "escalating", "severity": "high",
+        "message": "..."}`` or ``None`` if no intervention is needed.
+        """
+        transcript_block = "\n".join(
+            f"{'Speaker A' if spk == 'speaker_a' else 'Speaker B'}: {txt}"
+            for spk, txt in recent_turns
+        )
+        emotions_block = "\n".join(
+            f"{'Speaker A' if spk == 'speaker_a' else 'Speaker B'}: {', '.join(tags) or '(none)'}"
+            for spk, tags in emotion_signals
+        ) or "(none recorded yet)"
+
+        user_prompt = _MEDIATION_USER_TEMPLATE.format(
+            n=len(recent_turns),
+            transcript=transcript_block,
+            emotions=emotions_block,
+        )
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=200,
+                system=_MEDIATION_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = response.content[0].text.strip()
+            raw = _strip_markdown_fences(raw)
+            parsed = json.loads(raw)
+            if parsed is None:
+                return None
+            if isinstance(parsed, dict) and "trigger" in parsed and "message" in parsed:
+                return {
+                    "trigger": str(parsed["trigger"]),
+                    "severity": str(parsed.get("severity", "low")),
+                    "message": str(parsed["message"]),
+                }
+        except Exception as exc:
+            logger.warning("Mediation check failed: %s", exc)
+        return None
 
     async def generate_arguments(
         self,

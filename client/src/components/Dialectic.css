@@ -813,7 +813,9 @@
 }
 
 .d-emotion-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   font-weight: 700;
@@ -824,4 +826,161 @@
   border-radius: 99px;
   padding: 4px 12px;
   white-space: nowrap;
+}
+
+.d-emotion-pill-conf {
+  font-size: 9px;
+  font-weight: 400;
+  opacity: 0.5;
+  letter-spacing: 0;
+}
+
+/* ─── Confidence Bar ─────────────────────────────────────────────────────── */
+
+.d-conf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: 'Space Mono', monospace;
+}
+
+.d-conf-label {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #000000;
+  opacity: 0.45;
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+.d-arg-card--right .d-conf-row {
+  flex-direction: row-reverse;
+}
+
+.d-arg-card--right .d-conf-label {
+  text-align: right;
+}
+
+.d-conf-track {
+  flex: 1;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.d-conf-fill {
+  height: 100%;
+  background: #000000;
+}
+
+.d-conf--high .d-conf-fill,
+.d-conf-fill.d-conf--high {
+  background: #000000;
+  opacity: 0.8;
+}
+
+.d-conf--mid .d-conf-fill,
+.d-conf-fill.d-conf--mid {
+  background: #555555;
+  opacity: 0.65;
+}
+
+.d-conf--low .d-conf-fill,
+.d-conf-fill.d-conf--low {
+  background: #888888;
+  opacity: 0.5;
+}
+
+.d-conf-value {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: #000000;
+  opacity: 0.45;
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* ─── AI Mediation Overlay ───────────────────────────────────────────────── */
+
+/* Full-screen red flash — high severity only */
+.d-mediation-flash {
+  position: fixed;
+  inset: 0;
+  background: rgba(220, 38, 38, 0.18);
+  pointer-events: none;
+  z-index: 200;
+}
+
+/* Banner that slides in from the top */
+.d-mediation-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 201;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px 14px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.d-mediation-banner--low {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.d-mediation-banner--high {
+  background: rgba(254, 242, 242, 0.97);
+  backdrop-filter: blur(12px);
+  border-bottom-color: rgba(220, 38, 38, 0.2);
+}
+
+.d-mediation-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.d-mediation-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #dc2626;
+  font-weight: 400;
+}
+
+.d-mediation-banner--low .d-mediation-tag {
+  color: #92400e;
+}
+
+.d-mediation-message {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  color: #1a1a1a;
+}
+
+.d-mediation-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.35);
+  padding: 0 2px;
+  transition: color 0.15s;
+  font-family: inherit;
+}
+
+.d-mediation-dismiss:hover {
+  color: rgba(0, 0, 0, 0.7);
 }

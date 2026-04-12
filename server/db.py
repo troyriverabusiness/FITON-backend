@@ -29,4 +29,17 @@ async def init_db() -> None:
                 "title VARCHAR(200)"
             )
         )
+        # Add confidence columns to turns table.
+        await conn.execute(
+            text(
+                "ALTER TABLE turns ADD COLUMN IF NOT EXISTS "
+                "emotion_confidence JSON"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE turns ADD COLUMN IF NOT EXISTS "
+                "argument_confidence JSON"
+            )
+        )
     logger.info("Database tables ensured")

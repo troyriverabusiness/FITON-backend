@@ -15,6 +15,8 @@ interface TurnData {
   argument_text: string;
   counterargument_text: string;
   emotion_tags: string[] | null;
+  emotion_confidence: Record<string, number | null> | null;
+  argument_confidence: { argument: number | null; counterargument: number | null } | null;
   position: number;
 }
 
@@ -49,12 +51,36 @@ function formatTime(iso: string) {
   });
 }
 
-function EmotionPills({ tags }: { tags: string[] }) {
+function ConfidenceBar({ score, label }: { score: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, score));
+  const opacity = pct >= 75 ? 0.7 : pct >= 45 ? 0.5 : 0.35;
+
+  return (
+    <div className="cd-conf-row">
+      <span className="cd-conf-label">{label}</span>
+      <div className="cd-conf-track">
+        <div
+          className="cd-conf-fill"
+          style={{ width: `${pct}%`, opacity }}
+        />
+      </div>
+      <span className="cd-conf-value">{pct}%</span>
+    </div>
+  );
+}
+
+function EmotionPills({ tags, confidence }: { tags: string[]; confidence?: Record<string, number | null> | null }) {
   return (
     <div className="cd-emotion-pills">
-      {tags.map((tag) => (
-        <span key={tag} className="cd-emotion-pill">{tag}</span>
-      ))}
+      {tags.map((tag) => {
+        const conf = confidence?.[tag];
+        return (
+          <span key={tag} className="cd-emotion-pill">
+            {tag}
+            {conf != null && <span className="cd-emotion-pill-conf">{conf}%</span>}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -63,16 +89,19 @@ function ArgumentCard({
   label,
   text,
   side,
+  confidence,
 }: {
   label: string;
   text: string;
   side: "left" | "right";
+  confidence?: number | null;
 }) {
   if (!text) return null;
   return (
     <div className={`cd-arg-card cd-arg-card--${side}`}>
       <div className="cd-arg-meta">{label}</div>
       <div className="cd-arg-text">{text}</div>
+      {confidence != null && <ConfidenceBar score={confidence} label="ai confidence" />}
     </div>
   );
 }
@@ -95,7 +124,7 @@ function TurnBubble({ turn }: { turn: TurnData }) {
       <div className="cd-turn-text">{turn.text}</div>
 
       {turn.emotion_tags && turn.emotion_tags.length > 0 && (
-        <EmotionPills tags={turn.emotion_tags} />
+        <EmotionPills tags={turn.emotion_tags} confidence={turn.emotion_confidence} />
       )}
 
       {hasArgs && (
@@ -117,10 +146,20 @@ function TurnBubble({ turn }: { turn: TurnData }) {
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
               >
                 {turn.argument_text && (
-                  <ArgumentCard label="argument" text={turn.argument_text} side={side} />
+                  <ArgumentCard
+                    label="argument"
+                    text={turn.argument_text}
+                    side={side}
+                    confidence={turn.argument_confidence?.argument}
+                  />
                 )}
                 {turn.counterargument_text && (
-                  <ArgumentCard label="counter" text={turn.counterargument_text} side={side} />
+                  <ArgumentCard
+                    label="counter"
+                    text={turn.counterargument_text}
+                    side={side}
+                    confidence={turn.argument_confidence?.counterargument}
+                  />
                 )}
               </motion.div>
             )}

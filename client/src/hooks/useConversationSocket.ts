@@ -13,11 +13,27 @@ export interface ArgumentUpdate {
   isFinal: boolean;
 }
 
+export interface EmotionTag {
+  tag: string;
+  confidence: number | null;
+}
+
+export interface ArgumentConfidence {
+  argument: number | null;
+  counterargument: number | null;
+}
+
 export interface TranscriptEntry {
   turnId: string;
   speaker: SpeakerLabel;
   text: string;
   isPartial: boolean;
+}
+
+export interface MediationAlert {
+  trigger: 'off_topic' | 'escalating' | 'emotional';
+  severity: 'low' | 'high';
+  message: string;
 }
 
 interface ServerMessage {
@@ -30,7 +46,11 @@ interface ServerMessage {
   is_partial?: boolean;
   text?: string;
   message?: string;
-  tags?: string[];
+  tags?: EmotionTag[];
+  trigger?: MediationAlert['trigger'];
+  severity?: MediationAlert['severity'];
+  argument?: number | null;
+  counterargument?: number | null;
 }
 
 const WS_URL =
@@ -58,9 +78,14 @@ export function useConversationSocket() {
   const [speakerAUpdates, setSpeakerAUpdates] = useState<ArgumentUpdate[]>([]);
   const [speakerBUpdates, setSpeakerBUpdates] = useState<ArgumentUpdate[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
-  // Emotion tags keyed by turn_id: { [turnId]: string[] }
-  const [speakerAEmotions, setSpeakerAEmotions] = useState<Record<string, string[]>>({});
-  const [speakerBEmotions, setSpeakerBEmotions] = useState<Record<string, string[]>>({});
+  // Emotion tags keyed by turn_id: { [turnId]: EmotionTag[] }
+  const [speakerAEmotions, setSpeakerAEmotions] = useState<Record<string, EmotionTag[]>>({});
+  const [speakerBEmotions, setSpeakerBEmotions] = useState<Record<string, EmotionTag[]>>({});
+  // Argument confidence keyed by turn_id: { [turnId]: ArgumentConfidence }
+  const [speakerAArgConfidence, setSpeakerAArgConfidence] = useState<Record<string, ArgumentConfidence>>({});
+  const [speakerBArgConfidence, setSpeakerBArgConfidence] = useState<Record<string, ArgumentConfidence>>({});
+  // AI mediator alert (null when dismissed or no alert)
+  const [mediationAlert, setMediationAlert] = useState<MediationAlert | null>(null);
 
   // ── Message handler (matches client/lib/socket.ts _handleMessage) ────────
 
@@ -130,6 +155,28 @@ export function useConversationSocket() {
         setter((prev) => ({ ...prev, [msg.turn_id!]: msg.tags ?? [] }));
         break;
       }
+
+      case "argument_confidence": {
+        // Route to OPPONENT's panel, same as argument_update.
+        const setter =
+          msg.speaker === "speaker_a" ? setSpeakerBArgConfidence : setSpeakerAArgConfidence;
+        setter((prev) => ({
+          ...prev,
+          [msg.turn_id!]: {
+            argument: msg.argument ?? null,
+            counterargument: msg.counterargument ?? null,
+          },
+        }));
+        break;
+      }
+
+      case "mediation_alert":
+        setMediationAlert({
+          trigger: msg.trigger!,
+          severity: msg.severity!,
+          message: msg.message!,
+        });
+        break;
 
       case "error":
         setMicError(msg.message ?? "Unknown server error");
@@ -279,6 +326,9 @@ export function useConversationSocket() {
     setTranscripts([]);
     setSpeakerAEmotions({});
     setSpeakerBEmotions({});
+    setSpeakerAArgConfidence({});
+    setSpeakerBArgConfidence({});
+    setMediationAlert(null);
     serverBusyRef.current = false;
     pendingBlobRef.current = null;
 
@@ -347,6 +397,8 @@ export function useConversationSocket() {
     wsRef.current = null;
   }, [stopRecorder]);
 
+  const dismissMediationAlert = useCallback(() => setMediationAlert(null), []);
+
   return {
     startSession,
     endSession,
@@ -357,6 +409,10 @@ export function useConversationSocket() {
     speakerBUpdates,
     speakerAEmotions,
     speakerBEmotions,
+    speakerAArgConfidence,
+    speakerBArgConfidence,
     transcripts,
+    mediationAlert,
+    dismissMediationAlert,
   };
 }

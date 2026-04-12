@@ -33,6 +33,7 @@ class PatternOut(BaseModel):
     emotional_drivers: str
     emotion_tags: list[str]
     rebuttal: str
+    confidence: int | None = None
 
 
 class BriefingOut(BaseModel):

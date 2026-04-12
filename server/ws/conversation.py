@@ -85,10 +85,15 @@ async def conversation_ws(websocket: WebSocket) -> None:
     arg_accumulator: dict[str, dict[str, str]] = defaultdict(
         lambda: {"argument": "", "counterargument": ""}
     )
-    # Accumulate emotion tags per turn_id.
-    emotion_accumulator: dict[str, list[str]] = {}
+    # Accumulate emotion tags per turn_id (list of {tag, confidence} dicts).
+    emotion_accumulator: dict[str, list[dict]] = {}
+    # Accumulate argument confidence scores per turn_id.
+    arg_confidence_accumulator: dict[str, dict[str, int | None]] = {}
     # Track turn ordering and speaker/text for persistence.
     turn_order: list[tuple[str, str, str]] = []  # (turn_id, speaker, text)
+    # Mediator: run every MEDIATION_INTERVAL completed turns.
+    MEDIATION_INTERVAL = 3
+    turns_since_mediation = 0
     session_start = datetime.now(timezone.utc)
 
     # Reset per-session speaker memory so SPEAKER_00 is always the first
@@ -185,6 +190,25 @@ async def conversation_ws(websocket: WebSocket) -> None:
                         "turn_id": turn_id,
                     })
 
+                    # Argument confidence — non-blocking, fires after arguments are done.
+                    try:
+                        args = arg_accumulator[turn_id]
+                        confidence = await claude.generate_argument_confidence(
+                            turn,
+                            argument_text=args.get("argument", ""),
+                            counterargument_text=args.get("counterargument", ""),
+                        )
+                        arg_confidence_accumulator[turn_id] = confidence
+                        await websocket.send_json({
+                            "type": "argument_confidence",
+                            "speaker": speaker.value,
+                            "turn_id": turn_id,
+                            "argument": confidence.get("argument"),
+                            "counterargument": confidence.get("counterargument"),
+                        })
+                    except Exception as exc:
+                        logger.warning("Argument confidence error for turn %s: %s", turn_id, exc)
+
                     # Emotion tags — non-blocking, fires after arguments are done.
                     try:
                         tags = await claude.generate_emotions(turn)
@@ -199,6 +223,33 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     except Exception as exc:
                         logger.warning("Emotion tags error for turn %s: %s", turn_id, exc)
 
+                    # AI Mediator — fires every MEDIATION_INTERVAL turns.
+                    turns_since_mediation += 1
+                    if turns_since_mediation >= MEDIATION_INTERVAL:
+                        turns_since_mediation = 0
+                        try:
+                            # Use the last 6 turns for context.
+                            recent = turn_order[-6:]
+                            emotion_signals = [
+                                (spk, [e["tag"] for e in emotion_accumulator.get(tid, [])])
+                                for tid, spk, _ in recent
+                            ]
+                            recent_text = [(spk, txt) for _, spk, txt in recent]
+                            alert = await claude.generate_mediation(recent_text, emotion_signals)
+                            if alert:
+                                logger.info(
+                                    "Session %s: mediation alert — %s (%s)",
+                                    session_id, alert["trigger"], alert["severity"],
+                                )
+                                await websocket.send_json({
+                                    "type": "mediation_alert",
+                                    "trigger": alert["trigger"],
+                                    "severity": alert["severity"],
+                                    "message": alert["message"],
+                                })
+                        except Exception as exc:
+                            logger.warning("Mediator error: %s", exc)
+
             # ── Text: control messages ─────────────────────────────────────────
             elif "text" in message and message["text"]:
                 try:
@@ -209,6 +260,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     await _save_conversation(
                         session_id, session_start, turn_order,
                         arg_accumulator, emotion_accumulator,
+                        arg_confidence_accumulator,
                         claude,
                     )
                     state.is_active = False
@@ -263,7 +315,8 @@ async def _save_conversation(
     started_at: datetime,
     turn_order: list[tuple[str, str, str]],
     arg_accumulator: dict[str, dict[str, str]],
-    emotion_accumulator: dict[str, list[str]],
+    emotion_accumulator: dict[str, list[dict]],
+    arg_confidence_accumulator: dict[str, dict[str, int | None]],
     claude: ClaudeService,
 ) -> None:
     """Persist the completed conversation and its turns to the database."""
@@ -284,6 +337,11 @@ async def _save_conversation(
 
             for position, (turn_id, speaker, text) in enumerate(turn_order):
                 args = arg_accumulator.get(turn_id, {})
+                emotions = emotion_accumulator.get(turn_id)
+                # Store emotion tags as plain strings for the legacy column;
+                # store the full {tag, confidence} objects in the confidence column.
+                emotion_tag_strings = [e["tag"] for e in emotions] if emotions else None
+                emotion_conf = {e["tag"]: e["confidence"] for e in emotions} if emotions else None
                 db_turn = DBTurn(
                     id=uuid.UUID(turn_id),
                     conversation_id=conversation.id,
@@ -291,7 +349,9 @@ async def _save_conversation(
                     text=text,
                     argument_text=args.get("argument", ""),
                     counterargument_text=args.get("counterargument", ""),
-                    emotion_tags=emotion_accumulator.get(turn_id),
+                    emotion_tags=emotion_tag_strings,
+                    emotion_confidence=emotion_conf,
+                    argument_confidence=arg_confidence_accumulator.get(turn_id),
                     position=position,
                 )
                 session.add(db_turn)

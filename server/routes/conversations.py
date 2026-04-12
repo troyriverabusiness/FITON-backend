@@ -25,6 +25,8 @@ class TurnOut(BaseModel):
     argument_text: str
     counterargument_text: str
     emotion_tags: list[str] | None
+    emotion_confidence: dict | None = None
+    argument_confidence: dict | None = None
     position: int
 
     model_config = {"from_attributes": True}
@@ -112,6 +114,8 @@ async def get_conversation(conversation_id: str):
                 argument_text=t.argument_text,
                 counterargument_text=t.counterargument_text,
                 emotion_tags=t.emotion_tags,
+                emotion_confidence=t.emotion_confidence,
+                argument_confidence=t.argument_confidence,
                 position=t.position,
             )
             for t in sorted(conversation.turns, key=lambda t: t.position)

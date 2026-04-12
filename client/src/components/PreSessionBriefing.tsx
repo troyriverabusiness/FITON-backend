@@ -16,6 +16,7 @@ interface Pattern {
   emotional_drivers: string;
   emotion_tags: string[];
   rebuttal: string;
+  confidence: number | null;
 }
 
 interface BriefingResponse {
@@ -125,8 +126,22 @@ export default function PreSessionBriefing({ open, onOpenChange }: PreSessionBri
                 <div key={i} className="briefing-card">
                   <div className="briefing-card-header">
                     <span className="briefing-card-label">argument {i + 1}</span>
+                    {pattern.confidence != null && (
+                      <span className="briefing-card-confidence">{pattern.confidence}% confidence</span>
+                    )}
                   </div>
                   <div className="briefing-card-argument">{pattern.argument}</div>
+                  {pattern.confidence != null && (
+                    <div className="briefing-conf-track">
+                      <div
+                        className="briefing-conf-fill"
+                        style={{
+                          width: `${pattern.confidence}%`,
+                          opacity: pattern.confidence >= 75 ? 0.65 : pattern.confidence >= 45 ? 0.45 : 0.3,
+                        }}
+                      />
+                    </div>
+                  )}
 
                   <div className="briefing-card-section-label">why people feel this way</div>
                   <div className="briefing-card-drivers">{pattern.emotional_drivers}</div>

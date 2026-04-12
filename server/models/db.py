@@ -49,6 +49,8 @@ class DBTurn(Base):
     argument_text: Mapped[str] = mapped_column(Text, default="")
     counterargument_text: Mapped[str] = mapped_column(Text, default="")
     emotion_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    emotion_confidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    argument_confidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     position: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

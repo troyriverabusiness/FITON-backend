@@ -9,6 +9,7 @@ interface Pattern {
   emotional_drivers: string;
   emotion_tags: string[];
   rebuttal: string;
+  confidence: number | null;
 }
 
 interface BriefingResult {
@@ -110,6 +111,21 @@ export default function Prepare() {
                   <div className="pr-card-body">
                     <div className="pr-card-section-label">the argument</div>
                     <div className="pr-card-arg">{p.argument}</div>
+                    {p.confidence != null && (
+                      <div className="pr-conf-row">
+                        <span className="pr-conf-label">ai confidence</span>
+                        <div className="pr-conf-track">
+                          <div
+                            className="pr-conf-fill"
+                            style={{
+                              width: `${p.confidence}%`,
+                              opacity: p.confidence >= 75 ? 0.7 : p.confidence >= 45 ? 0.5 : 0.35,
+                            }}
+                          />
+                        </div>
+                        <span className="pr-conf-value">{p.confidence}%</span>
+                      </div>
+                    )}
                     <div className="pr-card-divider" />
                     <div className="pr-card-section-label">why people feel this way</div>
                     <div className="pr-card-drivers">{p.emotional_drivers}</div>

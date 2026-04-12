@@ -5,6 +5,9 @@ import {
   type ArgumentUpdate,
   type ArgumentRole,
   type TranscriptEntry,
+  type MediationAlert,
+  type EmotionTag,
+  type ArgumentConfidence,
 } from '../hooks/useConversationSocket';
 import NavDrawer from './NavDrawer';
 import './Dialectic.css';
@@ -202,21 +205,48 @@ function LogoMark({ appState }: { appState: AppState }) {
   );
 }
 
+// ─── Confidence Bar ──────────────────────────────────────────────────────────
+
+function ConfidenceBar({ score, label }: { score: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, score));
+  const colorClass =
+    pct >= 75 ? 'd-conf--high' : pct >= 45 ? 'd-conf--mid' : 'd-conf--low';
+
+  return (
+    <div className="d-conf-row">
+      <span className="d-conf-label">{label}</span>
+      <div className="d-conf-track">
+        <motion.div
+          className={`d-conf-fill ${colorClass}`}
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        />
+      </div>
+      <span className="d-conf-value">{pct}%</span>
+    </div>
+  );
+}
+
 // ─── Emotion Pills ───────────────────────────────────────────────────────────
 
-function EmotionPills({ tags, side }: { tags: string[]; side: 'left' | 'right' }) {
+function EmotionPills({ tags, side }: { tags: EmotionTag[]; side: 'left' | 'right' }) {
   return (
     <div className={`d-emotion-pills d-emotion-pills--${side}`}>
       <AnimatePresence>
-        {tags.map((tag, i) => (
+        {tags.map((item, i) => (
           <motion.span
-            key={tag}
+            key={item.tag}
             className="d-emotion-pill"
+            title={item.confidence != null ? `confidence: ${item.confidence}%` : undefined}
             initial={{ opacity: 0, scale: 0.75, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.25, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
           >
-            {tag}
+            {item.tag}
+            {item.confidence != null && (
+              <span className="d-emotion-pill-conf">{item.confidence}%</span>
+            )}
           </motion.span>
         ))}
       </AnimatePresence>
@@ -249,11 +279,13 @@ function RoleCard({
   role,
   side,
   emotions,
+  confidence,
 }: {
   text: string;
   role: ArgumentRole;
   side: 'left' | 'right';
-  emotions?: string[];
+  emotions?: EmotionTag[];
+  confidence?: number | null;
 }) {
   const roleLabel = role === 'counterargument' ? 'counter' : 'argument';
 
@@ -266,6 +298,9 @@ function RoleCard({
     >
       <div className="d-arg-meta">{roleLabel}</div>
       <div className="d-arg-headline">{text}</div>
+      {confidence != null && (
+        <ConfidenceBar score={confidence} label="ai confidence" />
+      )}
       {emotions && emotions.length > 0 && <EmotionPills tags={emotions} side={side} />}
     </motion.div>
   );
@@ -291,10 +326,12 @@ function SpeakerPanel({
   side,
   updates,
   emotions,
+  argConfidence,
 }: {
   side: 'left' | 'right';
   updates: ArgumentUpdate[];
-  emotions: Record<string, string[]>;
+  emotions: Record<string, EmotionTag[]>;
+  argConfidence: Record<string, ArgumentConfidence>;
 }) {
   const { argument, counter } = useMemo(() => accumulateUpdates(updates), [updates]);
 
@@ -308,6 +345,7 @@ function SpeakerPanel({
   let idx = 0;
 
   if (argument.text) {
+    const conf = argument.turnId ? argConfidence[argument.turnId] : undefined;
     if (argument.isFinal) {
       items.push(
         <RoleCard
@@ -316,6 +354,7 @@ function SpeakerPanel({
           role="argument"
           side={side}
           emotions={emotions[argument.turnId]}
+          confidence={conf?.argument}
         />
       );
     } else {
@@ -326,8 +365,17 @@ function SpeakerPanel({
 
   if (counter.text) {
     if (idx > 0) items.push(<ArgumentSeparator key="sep" />);
+    const conf = counter.turnId ? argConfidence[counter.turnId] : undefined;
     if (counter.isFinal) {
-      items.push(<RoleCard key="counter" text={counter.text} role="counterargument" side={side} />);
+      items.push(
+        <RoleCard
+          key="counter"
+          text={counter.text}
+          role="counterargument"
+          side={side}
+          confidence={conf?.counterargument}
+        />
+      );
     } else {
       items.push(<StreamingCard key="counter-stream" text={counter.text} side={side} label="counter" />);
     }
@@ -393,14 +441,18 @@ function Canvas({
   speakerBUpdates,
   speakerAEmotions,
   speakerBEmotions,
+  speakerAArgConfidence,
+  speakerBArgConfidence,
   isConnected,
 }: {
   appState: AppState;
   audioLevel: number;
   speakerAUpdates: ArgumentUpdate[];
   speakerBUpdates: ArgumentUpdate[];
-  speakerAEmotions: Record<string, string[]>;
-  speakerBEmotions: Record<string, string[]>;
+  speakerAEmotions: Record<string, EmotionTag[]>;
+  speakerBEmotions: Record<string, EmotionTag[]>;
+  speakerAArgConfidence: Record<string, ArgumentConfidence>;
+  speakerBArgConfidence: Record<string, ArgumentConfidence>;
   isConnected: boolean;
 }) {
   const isRecording = appState === 'recording';
@@ -416,7 +468,7 @@ function Canvas({
           <div className="d-panel-line" />
         </div>
         <div className="d-panel-content">
-          <SpeakerPanel side="left" updates={speakerAUpdates} emotions={speakerAEmotions} />
+          <SpeakerPanel side="left" updates={speakerAUpdates} emotions={speakerAEmotions} argConfidence={speakerAArgConfidence} />
         </div>
       </div>
 
@@ -426,7 +478,7 @@ function Canvas({
           <div className="d-panel-line" />
         </div>
         <div className="d-panel-content">
-          <SpeakerPanel side="right" updates={speakerBUpdates} emotions={speakerBEmotions} />
+          <SpeakerPanel side="right" updates={speakerBUpdates} emotions={speakerBEmotions} argConfidence={speakerBArgConfidence} />
         </div>
       </div>
 
@@ -434,6 +486,54 @@ function Canvas({
         {isConnected ? 'connected' : 'disconnected'}
       </div>
     </div>
+  );
+}
+
+// ─── Mediation Overlay ──────────────────────────────────────────────────────
+
+const TRIGGER_LABELS: Record<MediationAlert['trigger'], string> = {
+  off_topic: 'off topic',
+  escalating: 'escalating',
+  emotional: 'getting emotional',
+};
+
+function MediationOverlay({
+  alert,
+  onDismiss,
+}: {
+  alert: MediationAlert;
+  onDismiss: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {alert && (
+        <>
+          {alert.severity === 'high' && (
+            <motion.div
+              className="d-mediation-flash"
+              initial={{ opacity: 0.6 }}
+              animate={{ opacity: 0 }}
+              transition={{ duration: 1.4, ease: 'easeOut' }}
+            />
+          )}
+          <motion.div
+            className={`d-mediation-banner d-mediation-banner--${alert.severity}`}
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="d-mediation-inner">
+              <span className="d-mediation-tag">{TRIGGER_LABELS[alert.trigger]}</span>
+              <p className="d-mediation-message">{alert.message}</p>
+            </div>
+            <button className="d-mediation-dismiss" onClick={onDismiss} aria-label="Dismiss">
+              ×
+            </button>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -452,7 +552,11 @@ export default function Dialectic() {
     speakerBUpdates,
     speakerAEmotions,
     speakerBEmotions,
+    speakerAArgConfidence,
+    speakerBArgConfidence,
     transcripts,
+    mediationAlert,
+    dismissMediationAlert,
   } = useConversationSocket();
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -526,6 +630,9 @@ export default function Dialectic() {
   return (
     <div className="d-root">
       <Header />
+      {mediationAlert && (
+        <MediationOverlay alert={mediationAlert} onDismiss={dismissMediationAlert} />
+      )}
 
       <div className="d-canvas-wrapper">
         <Canvas
@@ -535,6 +642,8 @@ export default function Dialectic() {
           speakerBUpdates={speakerBUpdates}
           speakerAEmotions={speakerAEmotions}
           speakerBEmotions={speakerBEmotions}
+          speakerAArgConfidence={speakerAArgConfidence}
+          speakerBArgConfidence={speakerBArgConfidence}
           isConnected={isConnected}
         />
       </div>

@@ -169,6 +169,9 @@
 }
 
 .briefing-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   margin-bottom: 10px;
   border-bottom: 1.5px solid #000000;
   padding-bottom: 8px;
@@ -181,6 +184,30 @@
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #000000;
+}
+
+.briefing-card-confidence {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: #000000;
+  opacity: 0.38;
+}
+
+/* ─── Confidence bar inside briefing card ──── */
+
+.briefing-conf-track {
+  height: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.briefing-conf-fill {
+  height: 100%;
+  background: #000000;
+  transition: width 0.5s ease;
 }
 
 .briefing-card-argument {
